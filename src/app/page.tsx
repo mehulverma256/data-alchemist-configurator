@@ -1,32 +1,713 @@
 'use client';
 
-import { useState } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Settings, Download } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Settings, Download, AlertTriangle, Edit3, Save, X } from 'lucide-react';
 
+// Types
+interface Client {
+  ClientID: string;
+  ClientName: string;
+  PriorityLevel: number;
+  RequestedTaskIDs: string[];
+  GroupTag: string;
+  AttributesJSON: Record<string, any>;
+}
+
+interface Worker {
+  WorkerID: string;
+  WorkerName: string;
+  Skills: string[];
+  AvailableSlots: number[];
+  MaxLoadPerPhase: number;
+  WorkerGroup: string;
+  QualificationLevel: string;
+}
+
+interface Task {
+  TaskID: string;
+  TaskName: string;
+  Category: string;
+  Duration: number;
+  RequiredSkills: string[];
+  PreferredPhases: number[];
+  MaxConcurrent: number;
+}
+
+interface ValidationError {
+  id: string;
+  type: 'error' | 'warning';
+  message: string;
+  field?: string;
+  entityType: 'client' | 'worker' | 'task';
+  entityId: string;
+  severity: 'low' | 'medium' | 'high';
+}
+
+interface ParseResult<T> {
+  data: T[];
+  errors: string[];
+  fileName: string;
+  type: 'clients' | 'workers' | 'tasks';
+}
+
+interface DataSet {
+  clients: Client[];
+  workers: Worker[];
+  tasks: Task[];
+}
+
+// Helper functions for parsing
+const parseArrayField = (value: string): string[] => {
+  if (!value || value.trim() === '') return [];
+  
+  // Remove outer quotes if present
+  let cleaned = value.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  
+  // Remove brackets if present
+  cleaned = cleaned.replace(/^\[|\]$/g, '').trim();
+  
+  if (!cleaned) return [];
+  
+  // Split by comma and clean each item
+  return cleaned.split(',')
+    .map(item => item.trim().replace(/^["']|["']$/g, ''))
+    .filter(item => item && item !== '');
+};
+
+const parseNumberArrayField = (value: string): number[] => {
+  if (!value || value.trim() === '') return [];
+  
+  // Remove outer quotes if present
+  let cleaned = value.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  
+  // Remove brackets if present
+  cleaned = cleaned.replace(/^\[|\]$/g, '').trim();
+  
+  if (!cleaned) return [];
+  
+  // Split by comma, convert to numbers, filter out NaN
+  return cleaned.split(',')
+    .map(item => {
+      const num = parseInt(item.trim());
+      return isNaN(num) ? null : num;
+    })
+    .filter((num): num is number => num !== null);
+};
+
+const parseJSONField = (value: string): Record<string, any> => {
+  if (!value || value.trim() === '' || value.trim() === '{}') return {};
+  
+  try {
+    // Remove outer quotes if they exist
+    let cleaned = value.trim();
+    if ((cleaned.startsWith('"') && cleaned.endsWith('"'))) {
+      cleaned = cleaned.slice(1, -1);
+      // Handle double-escaped quotes
+      cleaned = cleaned.replace(/""/g, '"');
+    }
+    
+    return JSON.parse(cleaned);
+  } catch (error) {
+    console.warn('Failed to parse JSON:', value);
+    return {};
+  }
+};
+
+// Robust CSV parser
+const parseCSV = (text: string): any[] => {
+  const lines = text.split('\n').filter(line => line.trim());
+  if (lines.length < 2) return [];
+  
+  // Robust CSV parsing that properly handles quoted fields
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let i = 0;
+    
+    while (i < line.length) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote within quotes
+          current += '"';
+          i += 2;
+        } else {
+          // Toggle quote state
+          inQuotes = !inQuotes;
+          i++;
+        }
+      } else if (char === ',' && !inQuotes) {
+        // Field separator outside quotes
+        result.push(current);
+        current = '';
+        i++;
+      } else {
+        current += char;
+        i++;
+      }
+    }
+    
+    // Add the last field
+    result.push(current);
+    return result;
+  };
+  
+  const headers = parseCSVLine(lines[0]);
+  const data: any[] = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCSVLine(lines[i]);
+    const row: any = {};
+    
+    headers.forEach((header, index) => {
+      row[header.trim()] = values[index] ? values[index].trim() : '';
+    });
+    
+    data.push(row);
+  }
+  
+  return data;
+};
+
+// File parser
+const parseFile = async (file: File): Promise<ParseResult<any>> => {
+  const fileName = file.name.toLowerCase();
+  const entityType = fileName.includes('client') ? 'clients' : 
+                    fileName.includes('worker') ? 'workers' : 'tasks';
+  
+  try {
+    const text = await file.text();
+    const rawData = parseCSV(text);
+    
+    if (rawData.length === 0) {
+      return {
+        data: [],
+        errors: ['File appears to be empty'],
+        fileName: file.name,
+        type: entityType
+      };
+    }
+    
+    // Parse based on entity type using helper functions
+    const parsedData = rawData.map((row, index) => {
+      try {
+        switch (entityType) {
+          case 'clients':
+            return {
+              ClientID: row.ClientID || row.clientid || row.id || '',
+              ClientName: row.ClientName || row.clientname || row.name || '',
+              PriorityLevel: parseInt(row.PriorityLevel || row.priority || '1') || 1,
+              RequestedTaskIDs: parseArrayField(row.RequestedTaskIDs || row.tasks || ''),
+              GroupTag: row.GroupTag || row.group || '',
+              AttributesJSON: parseJSONField(row.AttributesJSON || '{}')
+            };
+          case 'workers':
+            return {
+              WorkerID: row.WorkerID || row.workerid || row.id || '',
+              WorkerName: row.WorkerName || row.workername || row.name || '',
+              Skills: parseArrayField(row.Skills || row.skills || ''),
+              AvailableSlots: parseNumberArrayField(row.AvailableSlots || row.slots || ''),
+              MaxLoadPerPhase: parseInt(row.MaxLoadPerPhase || row.maxload || '1') || 1,
+              WorkerGroup: row.WorkerGroup || row.group || '',
+              QualificationLevel: row.QualificationLevel || row.level || ''
+            };
+          case 'tasks':
+            return {
+              TaskID: row.TaskID || row.taskid || row.id || '',
+              TaskName: row.TaskName || row.taskname || row.name || '',
+              Category: row.Category || row.category || '',
+              Duration: parseInt(row.Duration || row.duration || '1') || 1,
+              RequiredSkills: parseArrayField(row.RequiredSkills || row.skills || ''),
+              PreferredPhases: parseNumberArrayField(row.PreferredPhases || row.phases || ''),
+              MaxConcurrent: parseInt(row.MaxConcurrent || row.concurrent || '1') || 1
+            };
+          default:
+            return row;
+        }
+      } catch (error) {
+        return null;
+      }
+    }).filter(item => item !== null);
+    
+    return {
+      data: parsedData,
+      errors: [],
+      fileName: file.name,
+      type: entityType
+    };
+    
+  } catch (error) {
+    return {
+      data: [],
+      errors: [`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`],
+      fileName: file.name,
+      type: entityType
+    };
+  }
+};
+
+// Enhanced validation with more rules
+const validateDataSet = (data: DataSet) => {
+  const errors: ValidationError[] = [];
+  
+  // Validate clients
+  data.clients.forEach(client => {
+    if (!client.ClientID) {
+      errors.push({
+        id: `missing-client-id-${Math.random()}`,
+        type: 'error',
+        message: 'Missing ClientID',
+        field: 'ClientID',
+        entityType: 'client',
+        entityId: client.ClientID || 'Unknown',
+        severity: 'high'
+      });
+    }
+    if (!client.ClientName) {
+      errors.push({
+        id: `missing-client-name-${client.ClientID}`,
+        type: 'error',
+        message: 'Missing ClientName',
+        field: 'ClientName',
+        entityType: 'client',
+        entityId: client.ClientID,
+        severity: 'high'
+      });
+    }
+    if (client.PriorityLevel < 1 || client.PriorityLevel > 5) {
+      errors.push({
+        id: `invalid-priority-${client.ClientID}`,
+        type: 'error',
+        message: `PriorityLevel must be 1-5, got ${client.PriorityLevel}`,
+        field: 'PriorityLevel',
+        entityType: 'client',
+        entityId: client.ClientID,
+        severity: 'medium'
+      });
+    }
+  });
+  
+  // Validate workers
+  data.workers.forEach(worker => {
+    if (!worker.WorkerID) {
+      errors.push({
+        id: `missing-worker-id-${Math.random()}`,
+        type: 'error',
+        message: 'Missing WorkerID',
+        field: 'WorkerID',
+        entityType: 'worker',
+        entityId: worker.WorkerID || 'Unknown',
+        severity: 'high'
+      });
+    }
+    if (!worker.WorkerName) {
+      errors.push({
+        id: `missing-worker-name-${worker.WorkerID}`,
+        type: 'error',
+        message: 'Missing WorkerName',
+        field: 'WorkerName',
+        entityType: 'worker',
+        entityId: worker.WorkerID,
+        severity: 'high'
+      });
+    }
+    if (worker.Skills.length === 0) {
+      errors.push({
+        id: `no-skills-${worker.WorkerID}`,
+        type: 'warning',
+        message: 'Worker has no skills listed',
+        field: 'Skills',
+        entityType: 'worker',
+        entityId: worker.WorkerID,
+        severity: 'medium'
+      });
+    }
+    if (worker.AvailableSlots.length === 0) {
+      errors.push({
+        id: `no-slots-${worker.WorkerID}`,
+        type: 'error',
+        message: 'Worker has no available slots',
+        field: 'AvailableSlots',
+        entityType: 'worker',
+        entityId: worker.WorkerID,
+        severity: 'high'
+      });
+    }
+  });
+  
+  // Validate tasks
+  data.tasks.forEach(task => {
+    if (!task.TaskID) {
+      errors.push({
+        id: `missing-task-id-${Math.random()}`,
+        type: 'error',
+        message: 'Missing TaskID',
+        field: 'TaskID',
+        entityType: 'task',
+        entityId: task.TaskID || 'Unknown',
+        severity: 'high'
+      });
+    }
+    if (!task.TaskName) {
+      errors.push({
+        id: `missing-task-name-${task.TaskID}`,
+        type: 'error',
+        message: 'Missing TaskName',
+        field: 'TaskName',
+        entityType: 'task',
+        entityId: task.TaskID,
+        severity: 'high'
+      });
+    }
+    if (task.Duration < 1) {
+      errors.push({
+        id: `invalid-duration-${task.TaskID}`,
+        type: 'error',
+        message: `Duration must be at least 1, got ${task.Duration}`,
+        field: 'Duration',
+        entityType: 'task',
+        entityId: task.TaskID,
+        severity: 'medium'
+      });
+    }
+    if (task.RequiredSkills.length === 0) {
+      errors.push({
+        id: `no-required-skills-${task.TaskID}`,
+        type: 'warning',
+        message: 'Task has no required skills',
+        field: 'RequiredSkills',
+        entityType: 'task',
+        entityId: task.TaskID,
+        severity: 'medium'
+      });
+    }
+  });
+  
+  // Cross-reference validation
+  const taskIDs = new Set(data.tasks.map(task => task.TaskID));
+  const availableSkills = new Set(data.workers.flatMap(worker => worker.Skills));
+  
+  // Check if clients reference valid tasks
+  data.clients.forEach(client => {
+    client.RequestedTaskIDs.forEach(taskID => {
+      if (!taskIDs.has(taskID)) {
+        errors.push({
+          id: `invalid-task-ref-${client.ClientID}-${taskID}`,
+          type: 'error',
+          message: `References non-existent task: ${taskID}`,
+          field: 'RequestedTaskIDs',
+          entityType: 'client',
+          entityId: client.ClientID,
+          severity: 'high'
+        });
+      }
+    });
+  });
+  
+  // Check if tasks require skills that workers have
+  data.tasks.forEach(task => {
+    task.RequiredSkills.forEach(skill => {
+      if (!availableSkills.has(skill)) {
+        errors.push({
+          id: `unavailable-skill-${task.TaskID}-${skill}`,
+          type: 'warning',
+          message: `Requires skill '${skill}' but no worker has it`,
+          field: 'RequiredSkills',
+          entityType: 'task',
+          entityId: task.TaskID,
+          severity: 'high'
+        });
+      }
+    });
+  });
+  
+  return {
+    isValid: errors.filter(e => e.type === 'error').length === 0,
+    errors: errors.filter(e => e.type === 'error'),
+    warnings: errors.filter(e => e.type === 'warning')
+  };
+};
+
+// Data Grid Component
+interface DataGridProps {
+  data: (Client | Worker | Task)[];
+  type: 'clients' | 'workers' | 'tasks';
+  validationErrors: ValidationError[];
+  onDataChange: (updatedData: (Client | Worker | Task)[]) => void;
+}
+
+function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps) {
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: string } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const columns = {
+    clients: [
+      { key: 'ClientID', label: 'Client ID', editable: false },
+      { key: 'ClientName', label: 'Client Name', editable: true },
+      { key: 'PriorityLevel', label: 'Priority', editable: true },
+      { key: 'RequestedTaskIDs', label: 'Requested Tasks', editable: true },
+      { key: 'GroupTag', label: 'Group', editable: true }
+    ],
+    workers: [
+      { key: 'WorkerID', label: 'Worker ID', editable: false },
+      { key: 'WorkerName', label: 'Worker Name', editable: true },
+      { key: 'Skills', label: 'Skills', editable: true },
+      { key: 'AvailableSlots', label: 'Available Slots', editable: true },
+      { key: 'MaxLoadPerPhase', label: 'Max Load', editable: true },
+      { key: 'WorkerGroup', label: 'Group', editable: true }
+    ],
+    tasks: [
+      { key: 'TaskID', label: 'Task ID', editable: false },
+      { key: 'TaskName', label: 'Task Name', editable: true },
+      { key: 'Category', label: 'Category', editable: true },
+      { key: 'Duration', label: 'Duration', editable: true },
+      { key: 'RequiredSkills', label: 'Required Skills', editable: true },
+      { key: 'PreferredPhases', label: 'Preferred Phases', editable: true }
+    ]
+  };
+
+  const filteredData = data.filter(item => 
+    searchTerm === '' || Object.values(item).some(value => 
+      String(value).toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
+  const formatCellValue = (value: any): string => {
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value || '');
+  };
+
+  const getCellErrors = (rowIndex: number, field: string) => {
+    const item = filteredData[rowIndex];
+    const entityId = (item as any)[type.slice(0, -1) + 'ID'] || '';
+    return validationErrors.filter(error => 
+      error.entityId === entityId && error.field === field
+    );
+  };
+
+  const startEditing = (rowIndex: number, field: string) => {
+    const column = columns[type].find(col => col.key === field);
+    if (!column?.editable) return;
+    
+    setEditValue(formatCellValue((filteredData[rowIndex] as any)[field]));
+    setEditingCell({ rowIndex, field });
+  };
+
+  const saveEdit = () => {
+    if (!editingCell) return;
+    
+    const { rowIndex, field } = editingCell;
+    const updatedData = [...data];
+    const itemIndex = data.findIndex(item => 
+      (item as any)[type.slice(0, -1) + 'ID'] === (filteredData[rowIndex] as any)[type.slice(0, -1) + 'ID']
+    );
+    
+    if (itemIndex !== -1) {
+      let parsedValue: any = editValue;
+      
+      // Parse arrays
+      if (['RequestedTaskIDs', 'Skills', 'RequiredSkills', 'AvailableSlots', 'PreferredPhases'].includes(field)) {
+        parsedValue = editValue.split(',').map(v => v.trim()).filter(v => v);
+        if (['AvailableSlots', 'PreferredPhases'].includes(field)) {
+          parsedValue = parsedValue.map(v => parseInt(v)).filter(v => !isNaN(v));
+        }
+      }
+      
+      // Parse numbers
+      if (['PriorityLevel', 'Duration', 'MaxLoadPerPhase', 'MaxConcurrent'].includes(field)) {
+        parsedValue = parseInt(editValue) || 0;
+      }
+      
+      (updatedData[itemIndex] as any)[field] = parsedValue;
+      onDataChange(updatedData);
+    }
+    
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center space-x-4">
+        <input
+          type="text"
+          placeholder="Search data..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="input flex-1"
+        />
+        <div className="text-sm text-gray-600">
+          {filteredData.length} of {data.length} entries
+        </div>
+      </div>
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                {columns[type].map(column => (
+                  <th key={column.key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    {column.label}
+                    {column.editable && <Edit3 className="w-3 h-3 inline ml-1" />}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.map((item, rowIndex) => {
+                const entityId = (item as any)[type.slice(0, -1) + 'ID'] || `row-${rowIndex}`;
+                return (
+                  <tr key={entityId} className="border-b hover:bg-gray-50">
+                    {columns[type].map(column => {
+                      const cellErrors = getCellErrors(rowIndex, column.key);
+                      const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === column.key;
+                      
+                      return (
+                        <td
+                          key={`${entityId}-${column.key}`}
+                          className={`p-3 ${cellErrors.length > 0 ? 'bg-red-50' : ''} ${isEditing ? 'bg-blue-50' : ''}`}
+                          onClick={() => !isEditing && startEditing(rowIndex, column.key)}
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="input text-sm"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveEdit();
+                                  if (e.key === 'Escape') setEditingCell(null);
+                                }}
+                                autoFocus
+                              />
+                              <button onClick={saveEdit} className="text-green-600">
+                                <Save className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => setEditingCell(null)} className="text-red-600">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">{formatCellValue((item as any)[column.key])}</span>
+                              {cellErrors.length > 0 && <AlertCircle className="w-4 h-4 text-red-500" />}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td key={`${entityId}-status`} className="p-3">
+                      {(() => {
+                        const itemErrors = validationErrors.filter(e => e.entityId === entityId);
+                        if (itemErrors.some(e => e.type === 'error')) {
+                          return <div className="flex items-center text-red-600"><AlertCircle className="w-4 h-4 mr-1" />Error</div>;
+                        } else if (itemErrors.some(e => e.type === 'warning')) {
+                          return <div className="flex items-center text-yellow-600"><AlertTriangle className="w-4 h-4 mr-1" />Warning</div>;
+                        }
+                        return <div className="flex items-center text-green-600"><CheckCircle className="w-4 h-4 mr-1" />Valid</div>;
+                      })()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {validationErrors.length > 0 && (
+        <div className="bg-gray-50 border rounded-lg p-4">
+          <h4 className="font-medium mb-2">Validation Issues</h4>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {validationErrors.slice(0, 5).map(error => (
+              <div key={error.id} className={`text-sm ${error.type === 'error' ? 'text-red-600' : 'text-yellow-600'}`}>
+                {error.entityId}: {error.message}
+              </div>
+            ))}
+            {validationErrors.length > 5 && (
+              <div className="text-xs text-gray-500">... and {validationErrors.length - 5} more</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Main Component
 export default function HomePage() {
   const [currentStep, setCurrentStep] = useState<'upload' | 'validate' | 'rules' | 'export'>('upload');
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<ParseResult<any>[]>([]);
   const [validationStatus, setValidationStatus] = useState<'pending' | 'validating' | 'complete' | 'error'>('pending');
+  const [dataSet, setDataSet] = useState<DataSet>({ clients: [], workers: [], tasks: [] });
+  const [validationResult, setValidationResult] = useState<{ isValid: boolean; errors: ValidationError[]; warnings: ValidationError[] }>({ isValid: true, errors: [], warnings: [] });
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const steps = [
-    { id: 'upload', label: 'Upload Data', icon: Upload, description: 'Upload CSV/XLSX files' },
+    { id: 'upload', label: 'Upload Data', icon: Upload, description: 'Upload CSV files' },
     { id: 'validate', label: 'Validate & Fix', icon: CheckCircle, description: 'Review and fix data issues' },
     { id: 'rules', label: 'Business Rules', icon: Settings, description: 'Configure allocation rules' },
     { id: 'export', label: 'Export', icon: Download, description: 'Download cleaned data' },
   ];
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (files: FileList) => {
+    setIsUploading(true);
+    setValidationStatus('validating');
+    
+    const results: ParseResult<any>[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const result = await parseFile(file);
+      results.push(result);
+    }
+    
+    setUploadedFiles(results);
+    
+    // Organize data by type
+    const newDataSet: DataSet = { clients: [], workers: [], tasks: [] };
+    
+    results.forEach(result => {
+      if (result.data.length > 0) {
+        newDataSet[result.type] = result.data;
+      }
+    });
+    
+    setDataSet(newDataSet);
+    
+    // Run validation
+    const validation = validateDataSet(newDataSet);
+    setValidationResult(validation);
+    
+    setValidationStatus('complete');
+    setIsUploading(false);
+    
+    // Auto-advance if files were successfully parsed
+    if (results.some(r => r.data.length > 0)) {
+      setCurrentStep('validate');
+    }
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (files) {
-      const fileNames = Array.from(files).map(file => file.name);
-      setUploadedFiles(prev => [...prev, ...fileNames]);
-      setValidationStatus('validating');
-      
-      // Simulate validation process
-      setTimeout(() => {
-        setValidationStatus('complete');
-        setCurrentStep('validate');
-      }, 2000);
+    if (files && files.length > 0) {
+      handleFileUpload(files);
     }
   };
 
@@ -37,16 +718,19 @@ export default function HomePage() {
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     const files = event.dataTransfer.files;
-    if (files) {
-      const fileNames = Array.from(files).map(file => file.name);
-      setUploadedFiles(prev => [...prev, ...fileNames]);
-      setValidationStatus('validating');
-      
-      setTimeout(() => {
-        setValidationStatus('complete');
-        setCurrentStep('validate');
-      }, 2000);
+    if (files && files.length > 0) {
+      handleFileUpload(files);
     }
+  };
+
+  const handleDataChange = (entityType: 'clients' | 'workers' | 'tasks', updatedData: any[]) => {
+    const newDataSet = { ...dataSet };
+    newDataSet[entityType] = updatedData;
+    setDataSet(newDataSet);
+    
+    // Re-run validation
+    const validation = validateDataSet(newDataSet);
+    setValidationResult(validation);
   };
 
   const getStepStatus = (stepId: string) => {
@@ -58,19 +742,113 @@ export default function HomePage() {
     return 'upcoming';
   };
 
+  const exportData = () => {
+    const convertToCSV = (data: any[]): string => {
+      if (data.length === 0) return '';
+      
+      const headers = Object.keys(data[0]);
+      
+      // Properly escape CSV values
+      const escapeCSVValue = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        
+        let stringValue: string;
+        
+        // Handle arrays - join with commas
+        if (Array.isArray(value)) {
+          stringValue = value.join(',');
+        } 
+        // Handle objects - stringify
+        else if (typeof value === 'object') {
+          stringValue = JSON.stringify(value).replace(/"/g, '""');
+        } 
+        // Handle everything else
+        else {
+          stringValue = String(value);
+        }
+        
+        // Always wrap in quotes to prevent CSV parsing issues
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      };
+      
+      // Create header row
+      const headerRow = headers.map(header => `"${header}"`).join(',');
+      
+      // Create data rows
+      const dataRows = data.map(row => 
+        headers.map(header => escapeCSVValue(row[header])).join(',')
+      );
+      
+      return [headerRow, ...dataRows].join('\n');
+    };
+
+    const downloadFile = (content: string, fileName: string, mimeType: string = 'text/csv') => {
+      const BOM = '\uFEFF'; // Add BOM for better Excel compatibility
+      const blob = new Blob([BOM + content], { type: `${mimeType};charset=utf-8;` });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
+    // Export each data type with proper formatting
+    if (dataSet.clients.length > 0) {
+      console.log('Exporting clients:', dataSet.clients[0]); // Debug log
+      downloadFile(convertToCSV(dataSet.clients), 'clients_cleaned.csv');
+    }
+    
+    if (dataSet.workers.length > 0) {
+      console.log('Exporting workers:', dataSet.workers[0]); // Debug log
+      downloadFile(convertToCSV(dataSet.workers), 'workers_cleaned.csv');
+    }
+    
+    if (dataSet.tasks.length > 0) {
+      console.log('Exporting tasks:', dataSet.tasks[0]); // Debug log
+      downloadFile(convertToCSV(dataSet.tasks), 'tasks_cleaned.csv');
+    }
+
+    // Export validation report
+    const report = {
+      timestamp: new Date().toISOString(),
+      totalEntities: dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length,
+      validationPassed: validationResult.isValid,
+      errors: validationResult.errors,
+      warnings: validationResult.warnings,
+      summary: {
+        clients: dataSet.clients.length,
+        workers: dataSet.workers.length,
+        tasks: dataSet.tasks.length,
+        totalValidationIssues: validationResult.errors.length + validationResult.warnings.length
+      },
+      dataPreview: {
+        sampleClient: dataSet.clients[0] || null,
+        sampleWorker: dataSet.workers[0] || null,
+        sampleTask: dataSet.tasks[0] || null
+      }
+    };
+    
+    downloadFile(JSON.stringify(report, null, 2), 'validation_report.json', 'application/json');
+    
+    // Show success message
+    alert(`Exported ${dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length} records successfully!`);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* Header Section */}
+      {/* Header */}
       <div className="text-center space-y-4">
         <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
           <FileSpreadsheet className="w-4 h-4" />
           <span>AI Resource Allocation Configurator</span>
         </div>
-        <h1 className="text-4xl font-bold text-gray-900">
-          Transform Your Spreadsheet Chaos
-        </h1>
+        <h1 className="text-4xl font-bold text-gray-900">Transform Your Spreadsheet Chaos</h1>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-          Upload messy CSV/XLSX files, let AI validate and clean your data, configure business rules, 
+          Upload messy CSV files, let AI validate and clean your data, configure business rules, 
           and export perfect allocation-ready datasets.
         </p>
       </div>
@@ -85,11 +863,18 @@ export default function HomePage() {
             return (
               <div key={step.id} className="flex items-center">
                 <div className="flex flex-col items-center space-y-2">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    status === 'complete' ? 'bg-green-500 text-white' :
-                    status === 'current' ? 'bg-blue-500 text-white' :
-                    'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div 
+                    className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
+                      status === 'complete' ? 'bg-green-500 text-white' :
+                      status === 'current' ? 'bg-blue-500 text-white' :
+                      'bg-gray-200 text-gray-500'
+                    }`}
+                    onClick={() => {
+                      if (status === 'complete' || step.id === 'upload') {
+                        setCurrentStep(step.id as any);
+                      }
+                    }}
+                  >
                     <StepIcon className="w-6 h-6" />
                   </div>
                   <div className="text-center">
@@ -112,49 +897,55 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column - Main Action */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* File Upload Section */}
+          {/* Upload Section */}
           {currentStep === 'upload' && (
             <div className="card">
               <div className="card-header">
                 <h2 className="card-title">Upload Your Data Files</h2>
                 <p className="card-description">
-                  Upload CSV or XLSX files containing clients, workers, and tasks data. 
-                  Our AI will automatically map columns even if headers are misnamed.
+                  Upload CSV files containing clients, workers, and tasks data. 
+                  AI will automatically map columns even if headers are misnamed.
                 </p>
               </div>
               <div className="card-content">
                 <div 
-                  className="file-upload-area"
+                  className={`file-upload-area ${isUploading ? 'opacity-50' : ''}`}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                 >
                   <div className="space-y-4">
                     <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
-                      <Upload className="w-8 h-8 text-blue-600" />
+                      {isUploading ? (
+                        <div className="loading-spinner w-8 h-8"></div>
+                      ) : (
+                        <Upload className="w-8 h-8 text-blue-600" />
+                      )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900">Drop files here or click to upload</h3>
-                      <p className="text-sm text-gray-500">Supports CSV and XLSX files up to 10MB each</p>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {isUploading ? 'Processing files...' : 'Drop files here or click to upload'}
+                      </h3>
+                      <p className="text-sm text-gray-500">Supports CSV files up to 10MB each</p>
                     </div>
                     <input
+                      ref={fileInputRef}
                       type="file"
                       multiple
-                      accept=".csv,.xlsx,.xls"
-                      onChange={handleFileUpload}
+                      accept=".csv"
+                      onChange={handleFileInputChange}
                       className="hidden"
                       id="file-upload"
+                      disabled={isUploading}
                     />
                     <label
                       htmlFor="file-upload"
-                      className="btn btn-primary btn-lg cursor-pointer"
+                      className={`btn btn-primary btn-lg cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      Choose Files
+                      {isUploading ? 'Processing...' : 'Choose Files'}
                     </label>
                   </div>
                 </div>
@@ -162,16 +953,27 @@ export default function HomePage() {
                 {/* Uploaded Files List */}
                 {uploadedFiles.length > 0 && (
                   <div className="mt-6 space-y-2">
-                    <h4 className="font-medium text-gray-900">Uploaded Files:</h4>
-                    {uploadedFiles.map((fileName, index) => (
-                      <div key={index} className="flex items-center space-x-2 text-sm">
-                        <FileSpreadsheet className="w-4 h-4 text-green-500" />
-                        <span className="text-gray-700">{fileName}</span>
-                        {validationStatus === 'validating' ? (
-                          <div className="loading-spinner w-4 h-4"></div>
-                        ) : (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                        )}
+                    <h4 className="font-medium text-gray-900">Processing Results:</h4>
+                    {uploadedFiles.map((result, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <FileSpreadsheet className="w-4 h-4 text-blue-500" />
+                          <span className="text-sm text-gray-700">{result.fileName}</span>
+                          <span className="text-xs text-gray-500">({result.type})</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {result.errors.length > 0 ? (
+                            <div className="flex items-center space-x-1">
+                              <AlertCircle className="w-4 h-4 text-red-500" />
+                              <span className="text-xs text-red-600">{result.errors.length} errors</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                              <span className="text-xs text-green-600">{result.data.length} entries</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -182,55 +984,134 @@ export default function HomePage() {
 
           {/* Validation Section */}
           {currentStep === 'validate' && (
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">Data Validation & Editing</h2>
-                <p className="card-description">
-                  Review your data, fix any errors, and use natural language to search and modify entries.
-                </p>
+            <div className="space-y-6">
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="card-title">Data Validation & Editing</h2>
+                  <p className="card-description">
+                    Review your data, fix any errors, and search through entries.
+                  </p>
+                </div>
               </div>
-              <div className="card-content">
-                <div className="space-y-4">
-                  {/* Search Bar */}
-                  <div className="flex space-x-2">
-                    <input 
-                      type="text"
-                      placeholder="Search with natural language: 'Tasks with duration > 2 phases'"
-                      className="input flex-1"
-                    />
-                    <button className="btn btn-primary">Search</button>
-                  </div>
 
-                  {/* Sample Data Grid Placeholder */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-2 border-b">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">Clients Data (10 entries)</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="badge badge-destructive">3 Errors</span>
-                          <span className="badge bg-yellow-500 text-white">2 Warnings</span>
-                        </div>
+              {/* Validation Summary */}
+              {(validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
+                <div className="card">
+                  <div className="card-header">
+                    <h3 className="card-title">Validation Summary</h3>
+                  </div>
+                  <div className="card-content">
+                    <div className="flex items-center space-x-6 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                        <span className="text-red-600 font-medium">{validationResult.errors.length} Errors</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                        <span className="text-yellow-600 font-medium">{validationResult.warnings.length} Warnings</span>
                       </div>
                     </div>
-                    <div className="p-4 text-center text-gray-500">
-                      Interactive data grid will be implemented here
-                      <br />
-                      <small>Milestone 1: Data grid with inline editing</small>
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button 
-                      className="btn btn-primary"
-                      onClick={() => setCurrentStep('rules')}
-                    >
-                      Continue to Rules
-                    </button>
-                    <button className="btn btn-outline">
-                      Auto-fix All Issues
-                    </button>
+                    {validationResult.errors.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                        <h4 className="text-sm font-medium text-red-800 mb-2">Critical Errors (Must Fix)</h4>
+                        <div className="space-y-1">
+                          {validationResult.errors.slice(0, 3).map(error => (
+                            <div key={error.id} className="text-sm text-red-700">
+                              • {error.entityId}: {error.message}
+                            </div>
+                          ))}
+                          {validationResult.errors.length > 3 && (
+                            <div className="text-xs text-red-600">... and {validationResult.errors.length - 3} more errors</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {validationResult.warnings.length > 0 && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <h4 className="text-sm font-medium text-yellow-800 mb-2">Warnings (Recommended to Fix)</h4>
+                        <div className="space-y-1">
+                          {validationResult.warnings.slice(0, 3).map(warning => (
+                            <div key={warning.id} className="text-sm text-yellow-700">
+                              • {warning.entityId}: {warning.message}
+                            </div>
+                          ))}
+                          {validationResult.warnings.length > 3 && (
+                            <div className="text-xs text-yellow-600">... and {validationResult.warnings.length - 3} more warnings</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
+              )}
+
+              {/* Data Grids */}
+              {dataSet.clients.length > 0 && (
+                <div className="card">
+                  <div className="card-header">
+                    <h3 className="card-title">Clients Data ({dataSet.clients.length} entries)</h3>
+                  </div>
+                  <div className="card-content">
+                    <DataGrid
+                      data={dataSet.clients}
+                      type="clients"
+                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'client')}
+                      onDataChange={(data) => handleDataChange('clients', data)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {dataSet.workers.length > 0 && (
+                <div className="card">
+                  <div className="card-header">
+                    <h3 className="card-title">Workers Data ({dataSet.workers.length} entries)</h3>
+                  </div>
+                  <div className="card-content">
+                    <DataGrid
+                      data={dataSet.workers}
+                      type="workers"
+                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'worker')}
+                      onDataChange={(data) => handleDataChange('workers', data)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {dataSet.tasks.length > 0 && (
+                <div className="card">
+                  <div className="card-header">
+                    <h3 className="card-title">Tasks Data ({dataSet.tasks.length} entries)</h3>
+                  </div>
+                  <div className="card-content">
+                    <DataGrid
+                      data={dataSet.tasks}
+                      type="tasks"
+                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'task')}
+                      onDataChange={(data) => handleDataChange('tasks', data)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation */}
+              <div className="flex justify-between">
+                <button 
+                  className="btn btn-outline"
+                  onClick={() => setCurrentStep('upload')}
+                >
+                  Back to Upload
+                </button>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setCurrentStep('rules')}
+                  disabled={validationResult.errors.length > 0}
+                >
+                  Continue to Rules
+                  {validationResult.errors.length > 0 && (
+                    <span className="ml-2 text-xs">(Fix errors first)</span>
+                  )}
+                </button>
               </div>
             </div>
           )}
@@ -241,31 +1122,76 @@ export default function HomePage() {
               <div className="card-header">
                 <h2 className="card-title">Business Rules Configuration</h2>
                 <p className="card-description">
-                  Create allocation rules using our visual builder or natural language input.
+                  Create allocation rules using natural language or our visual builder.
                 </p>
               </div>
               <div className="card-content">
-                <div className="space-y-4">
-                  <textarea 
-                    placeholder="Describe a rule in plain English: 'Marketing tasks should never run in phase 1'"
-                    className="textarea min-h-[100px]"
-                  />
-                  <button className="btn btn-primary">Convert to Rule</button>
+                <div className="space-y-6">
+                  {/* Natural Language Rule Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Describe a rule in plain English:
+                    </label>
+                    <textarea 
+                      placeholder="Example: 'Marketing tasks should never run in phase 1' or 'Senior developers can take maximum 2 tasks per phase'"
+                      className="textarea min-h-[100px]"
+                    />
+                    <button className="btn btn-primary mt-2">Convert to Rule</button>
+                  </div>
                   
-                  <div className="border rounded-lg p-4 text-center text-gray-500">
-                    Visual rule builder will be implemented here
-                    <br />
-                    <small>Milestone 2: Rule creation interface</small>
+                  {/* Rule Templates */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Rule Templates</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button className="btn btn-outline text-left p-3 h-auto">
+                        <div>
+                          <div className="font-medium">Co-run Tasks</div>
+                          <div className="text-xs text-gray-500">Tasks that must run together</div>
+                        </div>
+                      </button>
+                      <button className="btn btn-outline text-left p-3 h-auto">
+                        <div>
+                          <div className="font-medium">Load Limit</div>
+                          <div className="text-xs text-gray-500">Max tasks per worker/phase</div>
+                        </div>
+                      </button>
+                      <button className="btn btn-outline text-left p-3 h-auto">
+                        <div>
+                          <div className="font-medium">Phase Window</div>
+                          <div className="text-xs text-gray-500">Restrict tasks to specific phases</div>
+                        </div>
+                      </button>
+                      <button className="btn btn-outline text-left p-3 h-auto">
+                        <div>
+                          <div className="font-medium">Skill Matching</div>
+                          <div className="text-xs text-gray-500">Ensure skill requirements are met</div>
+                        </div>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex space-x-2">
+                  {/* Created Rules Preview */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Created Rules</h4>
+                    <div className="border border-gray-200 rounded-lg p-4 text-center text-gray-500">
+                      No rules created yet. Use the templates above or describe rules in natural language.
+                    </div>
+                  </div>
+
+                  {/* Navigation */}
+                  <div className="flex justify-between pt-4">
+                    <button 
+                      className="btn btn-outline"
+                      onClick={() => setCurrentStep('validate')}
+                    >
+                      Back to Validation
+                    </button>
                     <button 
                       className="btn btn-primary"
                       onClick={() => setCurrentStep('export')}
                     >
                       Continue to Export
                     </button>
-                    <button className="btn btn-ghost">AI Rule Suggestions</button>
                   </div>
                 </div>
               </div>
@@ -278,36 +1204,99 @@ export default function HomePage() {
               <div className="card-header">
                 <h2 className="card-title">Export Configuration</h2>
                 <p className="card-description">
-                  Download your cleaned data and rules configuration for downstream processing.
+                  Download your cleaned data and configuration files for downstream processing.
                 </p>
               </div>
               <div className="card-content">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="border rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Data Files</h4>
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        <li>✓ clients_cleaned.csv</li>
-                        <li>✓ workers_cleaned.csv</li>
-                        <li>✓ tasks_cleaned.csv</li>
-                      </ul>
+                <div className="space-y-6">
+                  {/* Export Summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center space-x-2">
+                        <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+                        <span className="font-medium text-blue-900">Data Files</span>
+                      </div>
+                      <div className="mt-2 text-sm text-blue-700">
+                        <div>• {dataSet.clients.length} clients</div>
+                        <div>• {dataSet.workers.length} workers</div>
+                        <div>• {dataSet.tasks.length} tasks</div>
+                      </div>
                     </div>
-                    <div className="border rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Configuration</h4>
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        <li>✓ rules.json</li>
-                        <li>✓ priorities.json</li>
-                        <li>✓ validation_report.pdf</li>
-                      </ul>
+                    
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="font-medium text-green-900">Validation</span>
+                      </div>
+                      <div className="mt-2 text-sm text-green-700">
+                        {validationResult.isValid ? (
+                          <div>✓ All validations passed</div>
+                        ) : (
+                          <div>
+                            <div>{validationResult.errors.length} errors</div>
+                            <div>{validationResult.warnings.length} warnings</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <div className="flex items-center space-x-2">
+                        <Settings className="w-5 h-5 text-purple-600" />
+                        <span className="font-medium text-purple-900">Rules</span>
+                      </div>
+                      <div className="mt-2 text-sm text-purple-700">
+                        <div>0 business rules</div>
+                        <div>Ready for export</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* File Preview */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Files to be exported:</h4>
+                    <div className="space-y-2">
+                      {dataSet.clients.length > 0 && (
+                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <span className="text-sm">clients_cleaned.csv</span>
+                          <span className="text-xs text-gray-500">{dataSet.clients.length} entries</span>
+                        </div>
+                      )}
+                      {dataSet.workers.length > 0 && (
+                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <span className="text-sm">workers_cleaned.csv</span>
+                          <span className="text-xs text-gray-500">{dataSet.workers.length} entries</span>
+                        </div>
+                      )}
+                      {dataSet.tasks.length > 0 && (
+                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <span className="text-sm">tasks_cleaned.csv</span>
+                          <span className="text-xs text-gray-500">{dataSet.tasks.length} entries</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm">validation_report.json</span>
+                        <span className="text-xs text-gray-500">Validation summary</span>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="flex space-x-2">
-                    <button className="btn btn-primary btn-lg">
+                  {/* Export Actions */}
+                  <div className="flex space-x-3">
+                    <button 
+                      className="btn btn-primary btn-lg flex-1"
+                      onClick={exportData}
+                      disabled={dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0}
+                    >
                       <Download className="w-4 h-4 mr-2" />
                       Download All Files
                     </button>
-                    <button className="btn btn-outline">Preview Export</button>
+                    <button 
+                      className="btn btn-outline"
+                      onClick={() => setCurrentStep('rules')}
+                    >
+                      Back to Rules
+                    </button>
                   </div>
                 </div>
               </div>
@@ -318,24 +1307,24 @@ export default function HomePage() {
         {/* Right Column - Status & Info */}
         <div className="space-y-6">
           
-          {/* Status Panel */}
+          {/* System Status */}
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">System Status</h3>
             </div>
             <div className="card-content space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">AI Engine</span>
+                <span className="text-sm text-gray-600">Parser Engine</span>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Online</span>
+                  <span className="text-sm text-green-600">Ready</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Validation Engine</span>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Ready</span>
+                  <span className="text-sm text-green-600">Active</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -351,20 +1340,32 @@ export default function HomePage() {
           {/* Quick Stats */}
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Quick Stats</h3>
+              <h3 className="card-title">Data Summary</h3>
             </div>
             <div className="card-content space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Files Processed</span>
-                <span className="text-sm font-medium">{uploadedFiles.length}</span>
+                <span className="text-sm text-gray-600">Total Clients</span>
+                <span className="text-sm font-medium">{dataSet.clients.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Validation Rules</span>
-                <span className="text-sm font-medium">12 Active</span>
+                <span className="text-sm text-gray-600">Total Workers</span>
+                <span className="text-sm font-medium">{dataSet.workers.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">AI Features</span>
-                <span className="text-sm font-medium">5 Available</span>
+                <span className="text-sm text-gray-600">Total Tasks</span>
+                <span className="text-sm font-medium">{dataSet.tasks.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Validation Errors</span>
+                <span className={`text-sm font-medium ${validationResult.errors.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {validationResult.errors.length}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Validation Warnings</span>
+                <span className={`text-sm font-medium ${validationResult.warnings.length > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {validationResult.warnings.length}
+                </span>
               </div>
             </div>
           </div>
@@ -372,20 +1373,33 @@ export default function HomePage() {
           {/* Help Panel */}
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Need Help?</h3>
+              <h3 className="card-title">Quick Tips</h3>
             </div>
             <div className="card-content space-y-3">
               <div className="text-sm text-gray-600">
-                <p>Try these natural language searches:</p>
-                <ul className="mt-2 space-y-1 text-xs">
-                  <li>• "High priority clients"</li>
-                  <li>• "Tasks needing Python skills"</li>
-                  <li>• "Workers available in phase 2"</li>
+                <h4 className="font-medium text-gray-900 mb-1">File Naming:</h4>
+                <ul className="text-xs space-y-1">
+                  <li>• Use "clients" in filename for client data</li>
+                  <li>• Use "workers" in filename for worker data</li>
+                  <li>• Use "tasks" in filename for task data</li>
                 </ul>
               </div>
-              <button className="btn btn-outline btn-sm w-full">
-                View Documentation
-              </button>
+              <div className="text-sm text-gray-600">
+                <h4 className="font-medium text-gray-900 mb-1">Data Format:</h4>
+                <ul className="text-xs space-y-1">
+                  <li>• Arrays: "skill1,skill2,skill3"</li>
+                  <li>• Numbers: "1,2,3" or "[1,2,3]"</li>
+                  <li>• Priority: 1-5 (higher = more important)</li>
+                </ul>
+              </div>
+              <div className="text-sm text-gray-600">
+                <h4 className="font-medium text-gray-900 mb-1">Editing Tips:</h4>
+                <ul className="text-xs space-y-1">
+                  <li>• Click any cell to edit inline</li>
+                  <li>• Press Enter to save, Esc to cancel</li>
+                  <li>• Use search to find specific entries</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
