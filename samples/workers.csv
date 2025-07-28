@@ -1,0 +1,16 @@
+WorkerID,WorkerName,Skills,AvailableSlots,MaxLoadPerPhase,WorkerGroup,QualificationLevel
+W001,Alice Johnson,"JavaScript,React,Node.js","[1,2,3,4,5]",3,Frontend,Senior
+W002,Bob Smith,"Python,Django,PostgreSQL","[1,3,5]",2,Backend,Mid
+W003,Carol Davis,"UI/UX,Figma,Adobe XD","[2,4,5]",2,Design,Senior
+W004,David Wilson,"Java,Spring,MySQL","[1,2,4]",3,Backend,Senior
+W005,Eve Brown,"React,TypeScript,GraphQL","[1,2,3]",2,Frontend,Mid
+W006,Frank Miller,"DevOps,AWS,Docker","[3,4,5]",2,Infrastructure,Senior
+W007,Grace Lee,"Python,ML,TensorFlow","[1,4,5]",1,DataScience,Expert
+W008,Henry Taylor,"PHP,Laravel,WordPress","[2,3,4]",3,Backend,Mid
+W009,Ivy Chen,"Flutter,Dart,Firebase","[1,2,5]",2,Mobile,Senior
+W010,Jack Anderson,"Angular,TypeScript,RxJS","[1,3,4]",2,Frontend,Mid
+W011,Kate Robinson,"QA,Selenium,Jest","[1,2,3,4,5]",4,Testing,Senior
+W012,Liam Martinez,"Go,Kubernetes,Redis","[2,4,5]",2,Backend,Senior
+W013,Mia Thompson,"HTML,CSS,SASS","[1,2,3]",3,Frontend,Junior
+W014,Noah Garcia,"C#,.NET,Azure","[3,4,5]",2,Backend,Senior
+W015,Olivia White,"Swift,iOS,Xcode","[1,4,5]",2,Mobile,Senior

@@ -1,0 +1,11 @@
+ClientID,ClientName,PriorityLevel,RequestedTaskIDs,GroupTag,AttributesJSON
+C001,Acme Corp,5,"T001,T002,T005",Enterprise,"{""budget"": 50000, ""deadline"": ""2024-03-15"", ""contact"": ""john.doe@acme.com""}"
+C002,TechStart Inc,3,"T003,T007",Startup,"{""budget"": 15000, ""deadline"": ""2024-04-01"", ""flexible"": true}"
+C003,Global Solutions,4,"T001,T004,T008,T009",Enterprise,"{""budget"": 75000, ""deadline"": ""2024-02-28"", ""premium_support"": true}"
+C004,Local Business,2,"T006,T010",SMB,"{""budget"": 8000, ""deadline"": ""2024-05-15"", ""location"": ""NYC""}"
+C005,Innovation Labs,5,"T002,T003,T011,T012",R&D,"{""budget"": 100000, ""deadline"": ""2024-03-30"", ""experimental"": true}"
+C006,Marketing Pro,3,"T013,T014",Marketing,"{""budget"": 25000, ""deadline"": ""2024-04-10"", ""industry"": ""retail""}"
+C007,Data Dynamics,4,"T015,T016,T017",Analytics,"{""budget"": 60000, ""deadline"": ""2024-03-20"", ""data_sensitive"": true}"
+C008,Web Wizards,2,"T018,T019",WebDev,"{""budget"": 12000, ""deadline"": ""2024-05-01"", ""cms_required"": true}"
+C009,Mobile Masters,5,"T020,T021,T022",Mobile,"{""budget"": 80000, ""deadline"": ""2024-02-25"", ""cross_platform"": true}"
+C010,Cloud Nine,3,"T023,T024",Cloud,"{""budget"": 45000, ""deadline"": ""2024-04-05"", ""aws_preferred"": true}"

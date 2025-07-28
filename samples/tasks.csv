@@ -1,0 +1,25 @@
+TaskID,TaskName,Category,Duration,RequiredSkills,PreferredPhases,MaxConcurrent
+T001,Frontend Dashboard,Development,2,"JavaScript,React","[1,2]",2
+T002,API Integration,Development,3,"Node.js,REST","[2,3,4]",1
+T003,Database Design,Architecture,1,"PostgreSQL,MySQL","[1]",1
+T004,UI/UX Research,Design,2,"UI/UX,Figma","[1,2]",2
+T005,Mobile App,Development,4,"Flutter,Firebase","[1,2,3,4]",1
+T006,Testing Suite,QA,2,"Selenium,Jest","[3,4]",3
+T007,DevOps Setup,Infrastructure,1,"AWS,Docker","[1]",1
+T008,Data Analytics,Analysis,3,"Python,ML","[2,3,4]",1
+T009,Security Audit,Security,1,"Security,Penetration","[5]",1
+T010,Documentation,Documentation,1,"Technical Writing","[4,5]",2
+T011,Performance Optimization,Development,2,"JavaScript,Performance","[3,4]",1
+T012,Machine Learning Model,DataScience,3,"Python,TensorFlow","[1,2,3]",1
+T013,Marketing Website,Development,2,"HTML,CSS,JavaScript","[1,2]",2
+T014,SEO Optimization,Marketing,1,"SEO,Analytics","[3]",1
+T015,Data Visualization,Analytics,2,"D3.js,Python","[2,3]",1
+T016,Cloud Migration,Infrastructure,3,"AWS,Migration","[1,2,3]",1
+T017,User Testing,Research,1,"UserTesting,Analytics","[4]",2
+T018,Content Management,Development,2,"WordPress,PHP","[2,3]",1
+T019,Progressive Web App,Development,3,"JavaScript,PWA","[1,2,3]",1
+T020,iOS App,Development,4,"Swift,iOS","[1,2,3,4]",1
+T021,Android App,Development,4,"Kotlin,Android","[1,2,3,4]",1
+T022,Cross-platform Testing,QA,2,"Mobile Testing","[4,5]",2
+T023,Serverless Architecture,Development,2,"Lambda,Serverless","[2,3]",1
+T024,Container Orchestration,Infrastructure,2,"Kubernetes,Docker","[3,4]",1
