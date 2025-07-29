@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Settings, Download, AlertTriangle, Edit3, Save, X } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Settings, Download, AlertTriangle, Edit3, Save, X, Wand2, Lightbulb, Trash2, Power, Brain, Search, Sliders } from 'lucide-react';
+import { 
+  convertNaturalLanguageToRule, 
+  generateRuleRecommendations, 
+  getErrorCorrectionSuggestions,
+  queryDataWithNL,
+  BusinessRule 
+} from '../lib/ai/ai';
 
 // Types
 interface Client {
@@ -546,7 +553,7 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
           placeholder="Search data..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="input flex-1"
+          className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <div className="text-sm text-gray-600">
           {filteredData.length} of {data.length} entries
@@ -588,7 +595,7 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
                                 type="text"
                                 value={editValue}
                                 onChange={(e) => setEditValue(e.target.value)}
-                                className="input text-sm"
+                                className="p-2 border border-gray-300 rounded text-sm flex-1"
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') saveEdit();
                                   if (e.key === 'Escape') setEditingCell(null);
@@ -659,12 +666,86 @@ export default function HomePage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // New AI-related state
+  const [businessRules, setBusinessRules] = useState<BusinessRule[]>([]);
+  const [naturalLanguageRule, setNaturalLanguageRule] = useState('');
+  const [recommendedRules, setRecommendedRules] = useState<BusinessRule[]>([]);
+  const [isProcessingRule, setIsProcessingRule] = useState(false);
+  const [correctionSuggestions, setCorrectionSuggestions] = useState<string[]>([]);
+  const [nlQuery, setNlQuery] = useState('');
+  const [queryResults, setQueryResults] = useState<any[]>([]);
+  const [priorityWeights, setPriorityWeights] = useState({
+    clientPriority: 40,
+    workerLoad: 30,
+    skillMatch: 30
+  });
+
   const steps = [
     { id: 'upload', label: 'Upload Data', icon: Upload, description: 'Upload CSV files' },
     { id: 'validate', label: 'Validate & Fix', icon: CheckCircle, description: 'Review and fix data issues' },
     { id: 'rules', label: 'Business Rules', icon: Settings, description: 'Configure allocation rules' },
     { id: 'export', label: 'Export', icon: Download, description: 'Download cleaned data' },
   ];
+
+  // AI Handler Functions
+  const handleCreateRule = async () => {
+    if (!naturalLanguageRule.trim()) return;
+    
+    setIsProcessingRule(true);
+    try {
+      const rule = await convertNaturalLanguageToRule(naturalLanguageRule);
+      setBusinessRules(prev => [...prev, rule]);
+      setNaturalLanguageRule('');
+    } catch (error) {
+      console.error('Error creating rule:', error);
+    } finally {
+      setIsProcessingRule(false);
+    }
+  };
+
+  const handleGenerateRecommendations = async () => {
+    try {
+      const recommendations = await generateRuleRecommendations(dataSet);
+      setRecommendedRules(recommendations);
+    } catch (error) {
+      console.error('Error generating recommendations:', error);
+    }
+  };
+
+  const handleGetCorrections = async () => {
+    try {
+      const suggestions = await getErrorCorrectionSuggestions(validationResult.errors);
+      setCorrectionSuggestions(suggestions);
+    } catch (error) {
+      console.error('Error getting corrections:', error);
+    }
+  };
+
+  const handleNLQuery = async () => {
+    if (!nlQuery.trim()) return;
+    
+    try {
+      const results = await queryDataWithNL(nlQuery, dataSet);
+      setQueryResults(results);
+    } catch (error) {
+      console.error('Error querying data:', error);
+    }
+  };
+
+  const addRecommendedRule = (rule: BusinessRule) => {
+    setBusinessRules(prev => [...prev, { ...rule, active: true, id: `rule-${Date.now()}` }]);
+    setRecommendedRules(prev => prev.filter(r => r.id !== rule.id));
+  };
+
+  const toggleRule = (id: string) => {
+    setBusinessRules(prev => prev.map(rule => 
+      rule.id === id ? { ...rule, active: !rule.active } : rule
+    ));
+  };
+
+  const deleteRule = (id: string) => {
+    setBusinessRules(prev => prev.filter(rule => rule.id !== id));
+  };
 
   const handleFileUpload = async (files: FileList) => {
     setIsUploading(true);
@@ -798,18 +879,26 @@ export default function HomePage() {
 
     // Export each data type with proper formatting
     if (dataSet.clients.length > 0) {
-      console.log('Exporting clients:', dataSet.clients[0]); // Debug log
       downloadFile(convertToCSV(dataSet.clients), 'clients_cleaned.csv');
     }
     
     if (dataSet.workers.length > 0) {
-      console.log('Exporting workers:', dataSet.workers[0]); // Debug log
       downloadFile(convertToCSV(dataSet.workers), 'workers_cleaned.csv');
     }
     
     if (dataSet.tasks.length > 0) {
-      console.log('Exporting tasks:', dataSet.tasks[0]); // Debug log
       downloadFile(convertToCSV(dataSet.tasks), 'tasks_cleaned.csv');
+    }
+
+    // Export business rules
+    if (businessRules.length > 0) {
+      const rulesReport = {
+        timestamp: new Date().toISOString(),
+        priorityWeights,
+        activeRules: businessRules.filter(r => r.active),
+        allRules: businessRules
+      };
+      downloadFile(JSON.stringify(rulesReport, null, 2), 'business_rules.json', 'application/json');
     }
 
     // Export validation report
@@ -819,27 +908,24 @@ export default function HomePage() {
       validationPassed: validationResult.isValid,
       errors: validationResult.errors,
       warnings: validationResult.warnings,
+      businessRulesCount: businessRules.filter(r => r.active).length,
+      priorityWeights,
       summary: {
         clients: dataSet.clients.length,
         workers: dataSet.workers.length,
         tasks: dataSet.tasks.length,
         totalValidationIssues: validationResult.errors.length + validationResult.warnings.length
-      },
-      dataPreview: {
-        sampleClient: dataSet.clients[0] || null,
-        sampleWorker: dataSet.workers[0] || null,
-        sampleTask: dataSet.tasks[0] || null
       }
     };
     
     downloadFile(JSON.stringify(report, null, 2), 'validation_report.json', 'application/json');
     
     // Show success message
-    alert(`Exported ${dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length} records successfully!`);
+    alert(`Exported ${dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length} records and ${businessRules.length} business rules successfully!`);
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8 p-6">
       {/* Header */}
       <div className="text-center space-y-4">
         <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
@@ -903,24 +989,24 @@ export default function HomePage() {
           
           {/* Upload Section */}
           {currentStep === 'upload' && (
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">Upload Your Data Files</h2>
-                <p className="card-description">
+            <div className="bg-white rounded-lg border shadow-sm p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Upload Your Data Files</h2>
+                <p className="text-gray-600 mt-1">
                   Upload CSV files containing clients, workers, and tasks data. 
                   AI will automatically map columns even if headers are misnamed.
                 </p>
               </div>
-              <div className="card-content">
+              <div className="space-y-4">
                 <div 
-                  className={`file-upload-area ${isUploading ? 'opacity-50' : ''}`}
+                  className={`border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors ${isUploading ? 'opacity-50' : ''}`}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                 >
                   <div className="space-y-4">
                     <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
                       {isUploading ? (
-                        <div className="loading-spinner w-8 h-8"></div>
+                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                       ) : (
                         <Upload className="w-8 h-8 text-blue-600" />
                       )}
@@ -943,7 +1029,7 @@ export default function HomePage() {
                     />
                     <label
                       htmlFor="file-upload"
-                      className={`btn btn-primary btn-lg cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {isUploading ? 'Processing...' : 'Choose Files'}
                     </label>
@@ -985,125 +1071,176 @@ export default function HomePage() {
           {/* Validation Section */}
           {currentStep === 'validate' && (
             <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="card-title">Data Validation & Editing</h2>
-                  <p className="card-description">
-                    Review your data, fix any errors, and search through entries.
-                  </p>
-                </div>
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Data Validation & Editing</h2>
+                <p className="text-gray-600">
+                  Review your data, fix any errors, and search through entries.
+                </p>
               </div>
+
+              {/* Natural Language Query */}
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Search className="w-5 h-5" />
+                  <h3 className="text-lg font-medium">Natural Language Data Retrieval</h3>
+                </div>
+                <p className="text-gray-600 mb-4">Query your data using natural language</p>
+                <div className="flex space-x-2 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Example: 'Show me high priority clients' or 'Find senior developers'"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={nlQuery}
+                    onChange={(e) => setNlQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleNLQuery()}
+                  />
+                  <button 
+                    onClick={handleNLQuery}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Search
+                  </button>
+                </div>
+                
+                {queryResults.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium text-gray-900 mb-2">Search Results ({queryResults.length})</h4>
+                    <div className="bg-gray-50 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                      {queryResults.slice(0, 5).map((item, index) => (
+                        <div key={index} className="text-sm text-gray-700 py-1">
+                          {item.ClientName || item.WorkerName || item.TaskName} 
+                          {item.PriorityLevel && ` (Priority: ${item.PriorityLevel})`}
+                          {item.QualificationLevel && ` (${item.QualificationLevel})`}
+                          {item.Category && ` (${item.Category})`}
+                        </div>
+                      ))}
+                      {queryResults.length > 5 && (
+                        <div className="text-xs text-gray-500 mt-2">
+                          ... and {queryResults.length - 5} more results
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Error Correction */}
+              {validationResult.errors.length > 0 && (
+                <div className="bg-white rounded-lg border shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Settings className="w-5 h-5" />
+                      <h3 className="text-lg font-medium">AI Error Correction</h3>
+                    </div>
+                    <button 
+                      onClick={handleGetCorrections}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Get AI Suggestions
+                    </button>
+                  </div>
+                  {correctionSuggestions.length > 0 ? (
+                    <div className="space-y-2">
+                      {correctionSuggestions.map((suggestion, index) => (
+                        <div key={index} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                            <span className="text-sm text-green-800">{suggestion}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      Click "Get AI Suggestions" to receive correction recommendations
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Validation Summary */}
               {(validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
-                <div className="card">
-                  <div className="card-header">
-                    <h3 className="card-title">Validation Summary</h3>
+                <div className="bg-white rounded-lg border shadow-sm p-6">
+                  <h3 className="text-lg font-medium mb-4">Validation Summary</h3>
+                  <div className="flex items-center space-x-6 mb-4">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <span className="text-red-600 font-medium">{validationResult.errors.length} Errors</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                      <span className="text-yellow-600 font-medium">{validationResult.warnings.length} Warnings</span>
+                    </div>
                   </div>
-                  <div className="card-content">
-                    <div className="flex items-center space-x-6 mb-4">
-                      <div className="flex items-center space-x-2">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <span className="text-red-600 font-medium">{validationResult.errors.length} Errors</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                        <span className="text-yellow-600 font-medium">{validationResult.warnings.length} Warnings</span>
+                  {validationResult.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                      <h4 className="text-sm font-medium text-red-800 mb-2">Critical Errors (Must Fix)</h4>
+                      <div className="space-y-1">
+                        {validationResult.errors.slice(0, 3).map(error => (
+                          <div key={error.id} className="text-sm text-red-700">
+                            • {error.entityId}: {error.message}
+                          </div>
+                        ))}
+                        {validationResult.errors.length > 3 && (
+                          <div className="text-xs text-red-600">... and {validationResult.errors.length - 3} more errors</div>
+                        )}
                       </div>
                     </div>
-                    {validationResult.errors.length > 0 && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                        <h4 className="text-sm font-medium text-red-800 mb-2">Critical Errors (Must Fix)</h4>
-                        <div className="space-y-1">
-                          {validationResult.errors.slice(0, 3).map(error => (
-                            <div key={error.id} className="text-sm text-red-700">
-                              • {error.entityId}: {error.message}
-                            </div>
-                          ))}
-                          {validationResult.errors.length > 3 && (
-                            <div className="text-xs text-red-600">... and {validationResult.errors.length - 3} more errors</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {validationResult.warnings.length > 0 && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                        <h4 className="text-sm font-medium text-yellow-800 mb-2">Warnings (Recommended to Fix)</h4>
-                        <div className="space-y-1">
-                          {validationResult.warnings.slice(0, 3).map(warning => (
-                            <div key={warning.id} className="text-sm text-yellow-700">
-                              • {warning.entityId}: {warning.message}
-                            </div>
-                          ))}
-                          {validationResult.warnings.length > 3 && (
-                            <div className="text-xs text-yellow-600">... and {validationResult.warnings.length - 3} more warnings</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
 
               {/* Data Grids */}
               {dataSet.clients.length > 0 && (
-                <div className="card">
-                  <div className="card-header">
-                    <h3 className="card-title">Clients Data ({dataSet.clients.length} entries)</h3>
-                  </div>
-                  <div className="card-content">
-                    <DataGrid
-                      data={dataSet.clients}
-                      type="clients"
-                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'client')}
-                      onDataChange={(data) => handleDataChange('clients', data)}
-                    />
-                  </div>
+                <div className="bg-white rounded-lg border shadow-sm p-6">
+                  <h3 className="text-lg font-medium mb-4">Clients Data ({dataSet.clients.length} entries)</h3>
+                  <DataGrid
+                    data={dataSet.clients}
+                    type="clients"
+                    validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'client')}
+                    onDataChange={(data) => handleDataChange('clients', data)}
+                  />
                 </div>
               )}
 
               {dataSet.workers.length > 0 && (
-                <div className="card">
-                  <div className="card-header">
-                    <h3 className="card-title">Workers Data ({dataSet.workers.length} entries)</h3>
-                  </div>
-                  <div className="card-content">
-                    <DataGrid
-                      data={dataSet.workers}
-                      type="workers"
-                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'worker')}
-                      onDataChange={(data) => handleDataChange('workers', data)}
-                    />
-                  </div>
+                <div className="bg-white rounded-lg border shadow-sm p-6">
+                  <h3 className="text-lg font-medium mb-4">Workers Data ({dataSet.workers.length} entries)</h3>
+                  <DataGrid
+                    data={dataSet.workers}
+                    type="workers"
+                    validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'worker')}
+                    onDataChange={(data) => handleDataChange('workers', data)}
+                  />
                 </div>
               )}
 
               {dataSet.tasks.length > 0 && (
-                <div className="card">
-                  <div className="card-header">
-                    <h3 className="card-title">Tasks Data ({dataSet.tasks.length} entries)</h3>
-                  </div>
-                  <div className="card-content">
-                    <DataGrid
-                      data={dataSet.tasks}
-                      type="tasks"
-                      validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'task')}
-                      onDataChange={(data) => handleDataChange('tasks', data)}
-                    />
-                  </div>
+                <div className="bg-white rounded-lg border shadow-sm p-6">
+                  <h3 className="text-lg font-medium mb-4">Tasks Data ({dataSet.tasks.length} entries)</h3>
+                  <DataGrid
+                    data={dataSet.tasks}
+                    type="tasks"
+                    validationErrors={validationResult.errors.concat(validationResult.warnings).filter(e => e.entityType === 'task')}
+                    onDataChange={(data) => handleDataChange('tasks', data)}
+                  />
                 </div>
               )}
 
               {/* Navigation */}
               <div className="flex justify-between">
                 <button 
-                  className="btn btn-outline"
+                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   onClick={() => setCurrentStep('upload')}
                 >
                   Back to Upload
                 </button>
                 <button 
-                  className="btn btn-primary"
+                  className={`px-6 py-3 rounded-lg transition-colors ${
+                    validationResult.errors.length > 0 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                   onClick={() => setCurrentStep('rules')}
                   disabled={validationResult.errors.length > 0}
                 >
@@ -1116,188 +1253,342 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Rules Section */}
+          {/* Enhanced Rules Section */}
           {currentStep === 'rules' && (
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">Business Rules Configuration</h2>
-                <p className="card-description">
-                  Create allocation rules using natural language or our visual builder.
-                </p>
+            <div className="space-y-6">
+              {/* Priority Weights Section */}
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Sliders className="w-5 h-5" />
+                  <h3 className="text-lg font-medium">Prioritization & Weights</h3>
+                </div>
+                <p className="text-gray-600 mb-6">Configure how different factors influence task allocation</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client Priority Weight: {priorityWeights.clientPriority}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={priorityWeights.clientPriority}
+                      onChange={(e) => setPriorityWeights(prev => ({ 
+                        ...prev, 
+                        clientPriority: parseInt(e.target.value)
+                      }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Worker Load Balance: {priorityWeights.workerLoad}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={priorityWeights.workerLoad}
+                      onChange={(e) => setPriorityWeights(prev => ({ 
+                        ...prev, 
+                        workerLoad: parseInt(e.target.value)
+                      }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Skill Matching: {priorityWeights.skillMatch}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={priorityWeights.skillMatch}
+                      onChange={(e) => setPriorityWeights(prev => ({ 
+                        ...prev, 
+                        skillMatch: parseInt(e.target.value)
+                      }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="card-content">
-                <div className="space-y-6">
-                  {/* Natural Language Rule Input */}
+
+              {/* Natural Language Rule Creation */}
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Brain className="w-5 h-5" />
+                  <h3 className="text-lg font-medium">AI-Powered Rule Creation</h3>
+                </div>
+                <p className="text-gray-600 mb-4">Describe rules in plain English and let AI convert them</p>
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Describe a rule in plain English:
                     </label>
                     <textarea 
                       placeholder="Example: 'Marketing tasks should never run in phase 1' or 'Senior developers can take maximum 2 tasks per phase'"
-                      className="textarea min-h-[100px]"
+                      className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                      value={naturalLanguageRule}
+                      onChange={(e) => setNaturalLanguageRule(e.target.value)}
                     />
-                    <button className="btn btn-primary mt-2">Convert to Rule</button>
-                  </div>
-                  
-                  {/* Rule Templates */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Rule Templates</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <button className="btn btn-outline text-left p-3 h-auto">
-                        <div>
-                          <div className="font-medium">Co-run Tasks</div>
-                          <div className="text-xs text-gray-500">Tasks that must run together</div>
-                        </div>
-                      </button>
-                      <button className="btn btn-outline text-left p-3 h-auto">
-                        <div>
-                          <div className="font-medium">Load Limit</div>
-                          <div className="text-xs text-gray-500">Max tasks per worker/phase</div>
-                        </div>
-                      </button>
-                      <button className="btn btn-outline text-left p-3 h-auto">
-                        <div>
-                          <div className="font-medium">Phase Window</div>
-                          <div className="text-xs text-gray-500">Restrict tasks to specific phases</div>
-                        </div>
-                      </button>
-                      <button className="btn btn-outline text-left p-3 h-auto">
-                        <div>
-                          <div className="font-medium">Skill Matching</div>
-                          <div className="text-xs text-gray-500">Ensure skill requirements are met</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Created Rules Preview */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Created Rules</h4>
-                    <div className="border border-gray-200 rounded-lg p-4 text-center text-gray-500">
-                      No rules created yet. Use the templates above or describe rules in natural language.
-                    </div>
-                  </div>
-
-                  {/* Navigation */}
-                  <div className="flex justify-between pt-4">
                     <button 
-                      className="btn btn-outline"
-                      onClick={() => setCurrentStep('validate')}
+                      onClick={handleCreateRule}
+                      disabled={isProcessingRule || !naturalLanguageRule.trim()}
+                      className={`mt-2 flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                        isProcessingRule || !naturalLanguageRule.trim()
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
                     >
-                      Back to Validation
-                    </button>
-                    <button 
-                      className="btn btn-primary"
-                      onClick={() => setCurrentStep('export')}
-                    >
-                      Continue to Export
+                      {isProcessingRule ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Converting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4" />
+                          <span>Convert to Rule</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* AI Recommendations */}
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Lightbulb className="w-5 h-5" />
+                    <h3 className="text-lg font-medium">AI Rule Recommendations</h3>
+                  </div>
+                  <button 
+                    onClick={handleGenerateRecommendations}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Generate Recommendations
+                  </button>
+                </div>
+                {recommendedRules.length > 0 ? (
+                  <div className="space-y-3">
+                    {recommendedRules.map(rule => (
+                      <div key={rule.id} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-blue-900">{rule.description}</h4>
+                            <p className="text-sm text-blue-700 mt-1">
+                              {rule.condition} → {rule.action}
+                            </p>
+                            <div className="flex items-center space-x-2 mt-2">
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                rule.type === 'constraint' ? 'bg-red-100 text-red-700' :
+                                rule.type === 'requirement' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {rule.type}
+                              </span>
+                              <span className="text-xs text-blue-600">Priority: {rule.priority}</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => addRecommendedRule(rule)}
+                            className="ml-3 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Add Rule
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    Click "Generate Recommendations" to get AI-suggested rules based on your data
+                  </div>
+                )}
+              </div>
+
+              {/* Active Rules */}
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <h3 className="text-lg font-medium mb-4">Active Business Rules ({businessRules.length})</h3>
+                {businessRules.length > 0 ? (
+                  <div className="space-y-3">
+                    {businessRules.map(rule => (
+                      <div key={rule.id} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <h4 className="font-medium text-gray-900">{rule.description}</h4>
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                rule.type === 'constraint' ? 'bg-red-100 text-red-700' :
+                                rule.type === 'requirement' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {rule.type}
+                              </span>
+                              <span className="text-xs text-gray-500">Priority: {rule.priority}</span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-2">
+                              <strong>When:</strong> {rule.condition}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              <strong>Then:</strong> {rule.action}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2 ml-3">
+                            <button
+                              onClick={() => toggleRule(rule.id)}
+                              className={`p-2 rounded-lg ${rule.active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}
+                            >
+                              <Power className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteRule(rule.id)}
+                              className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <Settings className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                    <p>No rules created yet</p>
+                    <p className="text-sm">Use the AI tools above to create your first rule</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Navigation */}
+              <div className="flex justify-between pt-4">
+                <button 
+                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => setCurrentStep('validate')}
+                >
+                  Back to Validation
+                </button>
+                <button 
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={() => setCurrentStep('export')}
+                >
+                  Continue to Export
+                </button>
               </div>
             </div>
           )}
 
           {/* Export Section */}
           {currentStep === 'export' && (
-            <div className="card">
-              <div className="card-header">
-                <h2 className="card-title">Export Configuration</h2>
-                <p className="card-description">
-                  Download your cleaned data and configuration files for downstream processing.
-                </p>
-              </div>
-              <div className="card-content">
-                <div className="space-y-6">
-                  {/* Export Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-center space-x-2">
-                        <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-                        <span className="font-medium text-blue-900">Data Files</span>
-                      </div>
-                      <div className="mt-2 text-sm text-blue-700">
-                        <div>• {dataSet.clients.length} clients</div>
-                        <div>• {dataSet.workers.length} workers</div>
-                        <div>• {dataSet.tasks.length} tasks</div>
-                      </div>
+            <div className="bg-white rounded-lg border shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Export Configuration</h2>
+              <p className="text-gray-600 mb-6">
+                Download your cleaned data and configuration files for downstream processing.
+              </p>
+              <div className="space-y-6">
+                {/* Export Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+                      <span className="font-medium text-blue-900">Data Files</span>
                     </div>
-                    
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-green-900">Validation</span>
-                      </div>
-                      <div className="mt-2 text-sm text-green-700">
-                        {validationResult.isValid ? (
-                          <div>✓ All validations passed</div>
-                        ) : (
-                          <div>
-                            <div>{validationResult.errors.length} errors</div>
-                            <div>{validationResult.warnings.length} warnings</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <div className="flex items-center space-x-2">
-                        <Settings className="w-5 h-5 text-purple-600" />
-                        <span className="font-medium text-purple-900">Rules</span>
-                      </div>
-                      <div className="mt-2 text-sm text-purple-700">
-                        <div>0 business rules</div>
-                        <div>Ready for export</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* File Preview */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Files to be exported:</h4>
-                    <div className="space-y-2">
-                      {dataSet.clients.length > 0 && (
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <span className="text-sm">clients_cleaned.csv</span>
-                          <span className="text-xs text-gray-500">{dataSet.clients.length} entries</span>
-                        </div>
-                      )}
-                      {dataSet.workers.length > 0 && (
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <span className="text-sm">workers_cleaned.csv</span>
-                          <span className="text-xs text-gray-500">{dataSet.workers.length} entries</span>
-                        </div>
-                      )}
-                      {dataSet.tasks.length > 0 && (
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <span className="text-sm">tasks_cleaned.csv</span>
-                          <span className="text-xs text-gray-500">{dataSet.tasks.length} entries</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm">validation_report.json</span>
-                        <span className="text-xs text-gray-500">Validation summary</span>
-                      </div>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <div>• {dataSet.clients.length} clients</div>
+                      <div>• {dataSet.workers.length} workers</div>
+                      <div>• {dataSet.tasks.length} tasks</div>
                     </div>
                   </div>
                   
-                  {/* Export Actions */}
-                  <div className="flex space-x-3">
-                    <button 
-                      className="btn btn-primary btn-lg flex-1"
-                      onClick={exportData}
-                      disabled={dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download All Files
-                    </button>
-                    <button 
-                      className="btn btn-outline"
-                      onClick={() => setCurrentStep('rules')}
-                    >
-                      Back to Rules
-                    </button>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="font-medium text-green-900">Validation</span>
+                    </div>
+                    <div className="mt-2 text-sm text-green-700">
+                      {validationResult.isValid ? (
+                        <div>✓ All validations passed</div>
+                      ) : (
+                        <div>
+                          <div>{validationResult.errors.length} errors</div>
+                          <div>{validationResult.warnings.length} warnings</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <Settings className="w-5 h-5 text-purple-600" />
+                      <span className="font-medium text-purple-900">Rules</span>
+                    </div>
+                    <div className="mt-2 text-sm text-purple-700">
+                      <div>{businessRules.filter(r => r.active).length} active rules</div>
+                      <div>Ready for export</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* File Preview */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Files to be exported:</h4>
+                  <div className="space-y-2">
+                    {dataSet.clients.length > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm">clients_cleaned.csv</span>
+                        <span className="text-xs text-gray-500">{dataSet.clients.length} entries</span>
+                      </div>
+                    )}
+                    {dataSet.workers.length > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm">workers_cleaned.csv</span>
+                        <span className="text-xs text-gray-500">{dataSet.workers.length} entries</span>
+                      </div>
+                    )}
+                    {dataSet.tasks.length > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm">tasks_cleaned.csv</span>
+                        <span className="text-xs text-gray-500">{dataSet.tasks.length} entries</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span className="text-sm">validation_report.json</span>
+                      <span className="text-xs text-gray-500">Validation summary</span>
+                    </div>
+                    {businessRules.length > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <span className="text-sm">business_rules.json</span>
+                        <span className="text-xs text-gray-500">{businessRules.length} rules</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Export Actions */}
+                <div className="flex space-x-3">
+                  <button 
+                    className={`flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg text-lg font-medium transition-colors ${
+                      dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                    onClick={exportData}
+                    disabled={dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download All Files</span>
+                  </button>
+                  <button 
+                    className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    onClick={() => setCurrentStep('rules')}
+                  >
+                    Back to Rules
+                  </button>
                 </div>
               </div>
             </div>
@@ -1308,11 +1599,9 @@ export default function HomePage() {
         <div className="space-y-6">
           
           {/* System Status */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">System Status</h3>
-            </div>
-            <div className="card-content space-y-3">
+          <div className="bg-white rounded-lg border shadow-sm p-6">
+            <h3 className="text-lg font-medium mb-4">System Status</h3>
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Parser Engine</span>
                 <div className="flex items-center space-x-2">
@@ -1328,6 +1617,13 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">AI Rules Engine</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-sm text-green-600">Ready</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Export System</span>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -1338,11 +1634,9 @@ export default function HomePage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Data Summary</h3>
-            </div>
-            <div className="card-content space-y-3">
+          <div className="bg-white rounded-lg border shadow-sm p-6">
+            <h3 className="text-lg font-medium mb-4">Data Summary</h3>
+            <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Total Clients</span>
                 <span className="text-sm font-medium">{dataSet.clients.length}</span>
@@ -1354,6 +1648,10 @@ export default function HomePage() {
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Total Tasks</span>
                 <span className="text-sm font-medium">{dataSet.tasks.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Active Rules</span>
+                <span className="text-sm font-medium">{businessRules.filter(r => r.active).length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Validation Errors</span>
@@ -1371,11 +1669,9 @@ export default function HomePage() {
           </div>
 
           {/* Help Panel */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Quick Tips</h3>
-            </div>
-            <div className="card-content space-y-3">
+          <div className="bg-white rounded-lg border shadow-sm p-6">
+            <h3 className="text-lg font-medium mb-4">Quick Tips</h3>
+            <div className="space-y-3">
               <div className="text-sm text-gray-600">
                 <h4 className="font-medium text-gray-900 mb-1">File Naming:</h4>
                 <ul className="text-xs space-y-1">
@@ -1393,11 +1689,12 @@ export default function HomePage() {
                 </ul>
               </div>
               <div className="text-sm text-gray-600">
-                <h4 className="font-medium text-gray-900 mb-1">Editing Tips:</h4>
+                <h4 className="font-medium text-gray-900 mb-1">AI Features:</h4>
                 <ul className="text-xs space-y-1">
-                  <li>• Click any cell to edit inline</li>
-                  <li>• Press Enter to save, Esc to cancel</li>
-                  <li>• Use search to find specific entries</li>
+                  <li>• Natural language rule creation</li>
+                  <li>• Smart data querying</li>
+                  <li>• Error correction suggestions</li>
+                  <li>• Automated rule recommendations</li>
                 </ul>
               </div>
             </div>
