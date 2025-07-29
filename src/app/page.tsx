@@ -528,7 +528,7 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
       if (['RequestedTaskIDs', 'Skills', 'RequiredSkills', 'AvailableSlots', 'PreferredPhases'].includes(field)) {
         parsedValue = editValue.split(',').map(v => v.trim()).filter(v => v);
         if (['AvailableSlots', 'PreferredPhases'].includes(field)) {
-          parsedValue = parsedValue.map(v => parseInt(v)).filter(v => !isNaN(v));
+          parsedValue = parsedValue.map((v: string) => parseInt(v)).filter((v: number) => !isNaN(v));
         }
       }
       
