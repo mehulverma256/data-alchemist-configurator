@@ -546,39 +546,59 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <input
           type="text"
           placeholder="Search data..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          style={{ 
+            flex: 1, 
+            padding: '8px 12px', 
+            border: '1px solid #d1d5db', 
+            borderRadius: '6px',
+            fontSize: '14px'
+          }}
         />
-        <div className="text-sm text-gray-600">
+        <div style={{ fontSize: '14px', color: '#6b7280' }}>
           {filteredData.length} of {data.length} entries
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', backgroundColor: 'white' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ backgroundColor: '#f9fafb' }}>
               <tr>
                 {columns[type].map(column => (
-                  <th key={column.key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th key={column.key} style={{ 
+                    padding: '12px 16px', 
+                    textAlign: 'left', 
+                    fontSize: '12px', 
+                    fontWeight: '500', 
+                    color: '#6b7280', 
+                    textTransform: 'uppercase' 
+                  }}>
                     {column.label}
-                    {column.editable && <Edit3 className="w-3 h-3 inline ml-1" />}
+                    {column.editable && <Edit3 style={{ width: '12px', height: '12px', display: 'inline', marginLeft: '4px' }} />}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th style={{ 
+                  padding: '12px 16px', 
+                  textAlign: 'left', 
+                  fontSize: '12px', 
+                  fontWeight: '500', 
+                  color: '#6b7280', 
+                  textTransform: 'uppercase' 
+                }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.map((item, rowIndex) => {
                 const entityId = (item as any)[type.slice(0, -1) + 'ID'] || `row-${rowIndex}`;
                 return (
-                  <tr key={entityId} className="border-b hover:bg-gray-50">
+                  <tr key={entityId} style={{ borderBottom: '1px solid #e5e7eb' }}>
                     {columns[type].map(column => {
                       const cellErrors = getCellErrors(rowIndex, column.key);
                       const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === column.key;
@@ -586,47 +606,69 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
                       return (
                         <td
                           key={`${entityId}-${column.key}`}
-                          className={`p-3 ${cellErrors.length > 0 ? 'bg-red-50' : ''} ${isEditing ? 'bg-blue-50' : ''}`}
+                          style={{
+                            padding: '12px',
+                            backgroundColor: cellErrors.length > 0 ? '#fef2f2' : isEditing ? '#eff6ff' : 'transparent',
+                            cursor: column.editable ? 'pointer' : 'default'
+                          }}
                           onClick={() => !isEditing && startEditing(rowIndex, column.key)}
                         >
                           {isEditing ? (
-                            <div className="flex items-center space-x-2">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <input
                                 type="text"
                                 value={editValue}
                                 onChange={(e) => setEditValue(e.target.value)}
-                                className="p-2 border border-gray-300 rounded text-sm flex-1"
+                                style={{ 
+                                  padding: '8px', 
+                                  border: '1px solid #d1d5db', 
+                                  borderRadius: '4px', 
+                                  fontSize: '14px', 
+                                  flex: 1 
+                                }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') saveEdit();
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
                                 autoFocus
                               />
-                              <button onClick={saveEdit} className="text-green-600">
-                                <Save className="w-4 h-4" />
+                              <button onClick={saveEdit} style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                <Save style={{ width: '16px', height: '16px' }} />
                               </button>
-                              <button onClick={() => setEditingCell(null)} className="text-red-600">
-                                <X className="w-4 h-4" />
+                              <button onClick={() => setEditingCell(null)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                <X style={{ width: '16px', height: '16px' }} />
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm">{formatCellValue((item as any)[column.key])}</span>
-                              {cellErrors.length > 0 && <AlertCircle className="w-4 h-4 text-red-500" />}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '14px' }}>{formatCellValue((item as any)[column.key])}</span>
+                              {cellErrors.length > 0 && <AlertCircle style={{ width: '16px', height: '16px', color: '#ef4444' }} />}
                             </div>
                           )}
                         </td>
                       );
                     })}
-                    <td key={`${entityId}-status`} className="p-3">
+                    <td key={`${entityId}-status`} style={{ padding: '12px' }}>
                       {(() => {
                         const itemErrors = validationErrors.filter(e => e.entityId === entityId);
                         if (itemErrors.some(e => e.type === 'error')) {
-                          return <div className="flex items-center text-red-600"><AlertCircle className="w-4 h-4 mr-1" />Error</div>;
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', color: '#dc2626' }}>
+                              <AlertCircle style={{ width: '16px', height: '16px', marginRight: '4px' }} />Error
+                            </div>
+                          );
                         } else if (itemErrors.some(e => e.type === 'warning')) {
-                          return <div className="flex items-center text-yellow-600"><AlertTriangle className="w-4 h-4 mr-1" />Warning</div>;
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', color: '#d97706' }}>
+                              <AlertTriangle style={{ width: '16px', height: '16px', marginRight: '4px' }} />Warning
+                            </div>
+                          );
                         }
-                        return <div className="flex items-center text-green-600"><CheckCircle className="w-4 h-4 mr-1" />Valid</div>;
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', color: '#16a34a' }}>
+                            <CheckCircle style={{ width: '16px', height: '16px', marginRight: '4px' }} />Valid
+                          </div>
+                        );
                       })()}
                     </td>
                   </tr>
@@ -638,16 +680,16 @@ function DataGrid({ data, type, validationErrors, onDataChange }: DataGridProps)
       </div>
       
       {validationErrors.length > 0 && (
-        <div className="bg-gray-50 border rounded-lg p-4">
-          <h4 className="font-medium mb-2">Validation Issues</h4>
-          <div className="space-y-1 max-h-32 overflow-y-auto">
+        <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+          <h4 style={{ fontWeight: '500', marginBottom: '8px' }}>Validation Issues</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '128px', overflowY: 'auto' }}>
             {validationErrors.slice(0, 5).map(error => (
-              <div key={error.id} className={`text-sm ${error.type === 'error' ? 'text-red-600' : 'text-yellow-600'}`}>
+              <div key={error.id} style={{ fontSize: '14px', color: error.type === 'error' ? '#dc2626' : '#d97706' }}>
                 {error.entityId}: {error.message}
               </div>
             ))}
             {validationErrors.length > 5 && (
-              <div className="text-xs text-gray-500">... and {validationErrors.length - 5} more</div>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>... and {validationErrors.length - 5} more</div>
             )}
           </div>
         </div>
@@ -924,58 +966,150 @@ export default function HomePage() {
     alert(`Exported ${dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length} records and ${businessRules.length} business rules successfully!`);
   };
 
+  // Styles
+  const containerStyle = {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '32px',
+    padding: '24px'
+  };
+
+  const headerStyle = {
+    textAlign: 'center' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '16px'
+  };
+
+  const badgeStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
+    padding: '8px 16px',
+    borderRadius: '999px',
+    fontSize: '14px',
+    fontWeight: '500'
+  };
+
+  const cardStyle = {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+    padding: '24px'
+  };
+
+  const buttonStyle = (variant: 'primary' | 'outline' | 'danger' = 'primary', disabled = false) => ({
+    padding: '12px 24px',
+    border: variant === 'outline' ? '1px solid #d1d5db' : 'none',
+    borderRadius: '6px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'all 0.2s',
+    backgroundColor: disabled ? '#e5e7eb' : 
+                    variant === 'primary' ? '#2563eb' : 
+                    variant === 'danger' ? '#dc2626' : 
+                    'transparent',
+    color: disabled ? '#9ca3af' :
+           variant === 'primary' ? 'white' : 
+           variant === 'danger' ? 'white' :
+           '#374151',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px'
+  });
+
+  const inputStyle = {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px'
+  };
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: '1fr',
+    gap: '32px'
+  };
+
+  const mainGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: '2fr 1fr',
+    gap: '32px'
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8 p-6">
+    <div style={containerStyle}>
       {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
-          <FileSpreadsheet className="w-4 h-4" />
+      <div style={headerStyle}>
+        <div style={badgeStyle}>
+          <FileSpreadsheet style={{ width: '16px', height: '16px' }} />
           <span>AI Resource Allocation Configurator</span>
         </div>
-        <h1 className="text-4xl font-bold text-gray-900">Transform Your Spreadsheet Chaos</h1>
-        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+        <h1 style={{ fontSize: '36px', fontWeight: 'bold', color: '#111827', margin: 0 }}>
+          Transform Your Spreadsheet Chaos
+        </h1>
+        <p style={{ fontSize: '20px', color: '#6b7280', maxWidth: '600px', margin: '0 auto' }}>
           Upload messy CSV files, let AI validate and clean your data, configure business rules, 
           and export perfect allocation-ready datasets.
         </p>
       </div>
 
       {/* Progress Steps */}
-      <div className="bg-white rounded-lg border shadow-sm p-6">
-        <div className="flex items-center justify-between">
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {steps.map((step, index) => {
             const status = getStepStatus(step.id);
             const StepIcon = step.icon;
             
             return (
-              <div key={step.id} className="flex items-center">
-                <div className="flex flex-col items-center space-y-2">
+              <div key={step.id} style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                   <div 
-                    className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
-                      status === 'complete' ? 'bg-green-500 text-white' :
-                      status === 'current' ? 'bg-blue-500 text-white' :
-                      'bg-gray-200 text-gray-500'
-                    }`}
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'colors 0.2s',
+                      backgroundColor: status === 'complete' ? '#10b981' : status === 'current' ? '#3b82f6' : '#e5e7eb',
+                      color: status === 'complete' || status === 'current' ? 'white' : '#6b7280'
+                    }}
                     onClick={() => {
                       if (status === 'complete' || step.id === 'upload') {
                         setCurrentStep(step.id as any);
                       }
                     }}
                   >
-                    <StepIcon className="w-6 h-6" />
+                    <StepIcon style={{ width: '24px', height: '24px' }} />
                   </div>
-                  <div className="text-center">
-                    <div className={`text-sm font-medium ${
-                      status === 'current' ? 'text-blue-600' : 'text-gray-900'
-                    }`}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: '14px', 
+                      fontWeight: '500',
+                      color: status === 'current' ? '#2563eb' : '#111827'
+                    }}>
                       {step.label}
                     </div>
-                    <div className="text-xs text-gray-500">{step.description}</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>{step.description}</div>
                   </div>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-24 h-1 mx-4 ${
-                    getStepStatus(steps[index + 1].id) === 'complete' ? 'bg-green-500' : 'bg-gray-200'
-                  }`} />
+                  <div style={{
+                    width: '96px',
+                    height: '4px',
+                    margin: '0 16px',
+                    backgroundColor: getStepStatus(steps[index + 1].id) === 'complete' ? '#10b981' : '#e5e7eb'
+                  }} />
                 )}
               </div>
             );
@@ -984,38 +1118,63 @@ export default function HomePage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div style={mainGridStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Upload Section */}
           {currentStep === 'upload' && (
-            <div className="bg-white rounded-lg border shadow-sm p-6">
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Upload Your Data Files</h2>
-                <p className="text-gray-600 mt-1">
+            <div style={cardStyle}>
+              <div style={{ marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+                  Upload Your Data Files
+                </h2>
+                <p style={{ color: '#6b7280', margin: 0 }}>
                   Upload CSV files containing clients, workers, and tasks data. 
                   AI will automatically map columns even if headers are misnamed.
                 </p>
               </div>
-              <div className="space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div 
-                  className={`border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors ${isUploading ? 'opacity-50' : ''}`}
+                  style={{
+                    border: '2px dashed #d1d5db',
+                    borderRadius: '8px',
+                    padding: '32px',
+                    textAlign: 'center',
+                    transition: 'border-color 0.2s',
+                    opacity: isUploading ? 0.5 : 1
+                  }}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                 >
-                  <div className="space-y-4">
-                    <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      margin: '0 auto',
+                      backgroundColor: '#dbeafe',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
                       {isUploading ? (
-                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          border: '2px solid #3b82f6',
+                          borderTop: '2px solid transparent',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
                       ) : (
-                        <Upload className="w-8 h-8 text-blue-600" />
+                        <Upload style={{ width: '32px', height: '32px', color: '#2563eb' }} />
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900">
+                      <h3 style={{ fontSize: '18px', fontWeight: '500', color: '#111827', margin: '0 0 4px 0' }}>
                         {isUploading ? 'Processing files...' : 'Drop files here or click to upload'}
                       </h3>
-                      <p className="text-sm text-gray-500">Supports CSV files up to 10MB each</p>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Supports CSV files up to 10MB each</p>
                     </div>
                     <input
                       ref={fileInputRef}
@@ -1023,13 +1182,17 @@ export default function HomePage() {
                       multiple
                       accept=".csv"
                       onChange={handleFileInputChange}
-                      className="hidden"
+                      style={{ display: 'none' }}
                       id="file-upload"
                       disabled={isUploading}
                     />
                     <label
                       htmlFor="file-upload"
-                      className={`inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      style={{
+                        ...buttonStyle('primary', isUploading),
+                        fontSize: '16px',
+                        padding: '12px 24px'
+                      }}
                     >
                       {isUploading ? 'Processing...' : 'Choose Files'}
                     </label>
@@ -1038,25 +1201,32 @@ export default function HomePage() {
 
                 {/* Uploaded Files List */}
                 {uploadedFiles.length > 0 && (
-                  <div className="mt-6 space-y-2">
-                    <h4 className="font-medium text-gray-900">Processing Results:</h4>
+                  <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <h4 style={{ fontWeight: '500', color: '#111827', margin: 0 }}>Processing Results:</h4>
                     {uploadedFiles.map((result, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-2">
-                          <FileSpreadsheet className="w-4 h-4 text-blue-500" />
-                          <span className="text-sm text-gray-700">{result.fileName}</span>
-                          <span className="text-xs text-gray-500">({result.type})</span>
+                      <div key={index} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <FileSpreadsheet style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
+                          <span style={{ fontSize: '14px', color: '#374151' }}>{result.fileName}</span>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>({result.type})</span>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {result.errors.length > 0 ? (
-                            <div className="flex items-center space-x-1">
-                              <AlertCircle className="w-4 h-4 text-red-500" />
-                              <span className="text-xs text-red-600">{result.errors.length} errors</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <AlertCircle style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+                              <span style={{ fontSize: '12px', color: '#dc2626' }}>{result.errors.length} errors</span>
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-1">
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                              <span className="text-xs text-green-600">{result.data.length} entries</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle style={{ width: '16px', height: '16px', color: '#10b981' }} />
+                              <span style={{ fontSize: '12px', color: '#059669' }}>{result.data.length} entries</span>
                             </div>
                           )}
                         </div>
@@ -1070,44 +1240,55 @@ export default function HomePage() {
 
           {/* Validation Section */}
           {currentStep === 'validate' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Data Validation & Editing</h2>
-                <p className="text-gray-600">
+            <div style={gridStyle}>
+              <div style={cardStyle}>
+                <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>
+                  Data Validation & Editing
+                </h2>
+                <p style={{ color: '#6b7280', margin: 0 }}>
                   Review your data, fix any errors, and search through entries.
                 </p>
               </div>
 
               {/* Natural Language Query */}
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Search className="w-5 h-5" />
-                  <h3 className="text-lg font-medium">Natural Language Data Retrieval</h3>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <Search style={{ width: '20px', height: '20px' }} />
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', margin: 0 }}>Natural Language Data Retrieval</h3>
                 </div>
-                <p className="text-gray-600 mb-4">Query your data using natural language</p>
-                <div className="flex space-x-2 mb-4">
+                <p style={{ color: '#6b7280', marginBottom: '16px' }}>Query your data using natural language</p>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                   <input
                     type="text"
                     placeholder="Example: 'Show me high priority clients' or 'Find senior developers'"
-                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ ...inputStyle, flex: 1, padding: '12px' }}
                     value={nlQuery}
                     onChange={(e) => setNlQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleNLQuery()}
                   />
                   <button 
                     onClick={handleNLQuery}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    style={buttonStyle('primary')}
                   >
                     Search
                   </button>
                 </div>
                 
                 {queryResults.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Search Results ({queryResults.length})</h4>
-                    <div className="bg-gray-50 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                  <div style={{ marginTop: '16px' }}>
+                    <h4 style={{ fontWeight: '500', color: '#111827', marginBottom: '8px' }}>
+                      Search Results ({queryResults.length})
+                    </h4>
+                    <div style={{
+                      backgroundColor: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      maxHeight: '160px',
+                      overflowY: 'auto'
+                    }}>
                       {queryResults.slice(0, 5).map((item, index) => (
-                        <div key={index} className="text-sm text-gray-700 py-1">
+                        <div key={index} style={{ fontSize: '14px', color: '#374151', paddingBottom: '4px' }}>
                           {item.ClientName || item.WorkerName || item.TaskName} 
                           {item.PriorityLevel && ` (Priority: ${item.PriorityLevel})`}
                           {item.QualificationLevel && ` (${item.QualificationLevel})`}
@@ -1115,7 +1296,7 @@ export default function HomePage() {
                         </div>
                       ))}
                       {queryResults.length > 5 && (
-                        <div className="text-xs text-gray-500 mt-2">
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
                           ... and {queryResults.length - 5} more results
                         </div>
                       )}
@@ -1126,32 +1307,43 @@ export default function HomePage() {
 
               {/* AI Error Correction */}
               {validationResult.errors.length > 0 && (
-                <div className="bg-white rounded-lg border shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Settings className="w-5 h-5" />
-                      <h3 className="text-lg font-medium">AI Error Correction</h3>
+                <div style={cardStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Settings style={{ width: '20px', height: '20px' }} />
+                      <h3 style={{ fontSize: '18px', fontWeight: '500', margin: 0 }}>AI Error Correction</h3>
                     </div>
                     <button 
                       onClick={handleGetCorrections}
-                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      style={buttonStyle('outline')}
                     >
                       Get AI Suggestions
                     </button>
                   </div>
                   {correctionSuggestions.length > 0 ? (
-                    <div className="space-y-2">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {correctionSuggestions.map((suggestion, index) => (
-                        <div key={index} className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-start space-x-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                            <span className="text-sm text-green-800">{suggestion}</span>
+                        <div key={index} style={{
+                          padding: '12px',
+                          backgroundColor: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            <div style={{
+                              width: '8px',
+                              height: '8px',
+                              backgroundColor: '#10b981',
+                              borderRadius: '50%',
+                              marginTop: '8px'
+                            }}></div>
+                            <span style={{ fontSize: '14px', color: '#065f46' }}>{suggestion}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-500 py-4">
+                    <div style={{ textAlign: 'center', color: '#6b7280', padding: '16px' }}>
                       Click "Get AI Suggestions" to receive correction recommendations
                     </div>
                   )}
@@ -1160,29 +1352,39 @@ export default function HomePage() {
 
               {/* Validation Summary */}
               {(validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
-                <div className="bg-white rounded-lg border shadow-sm p-6">
-                  <h3 className="text-lg font-medium mb-4">Validation Summary</h3>
-                  <div className="flex items-center space-x-6 mb-4">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                      <span className="text-red-600 font-medium">{validationResult.errors.length} Errors</span>
+                <div style={cardStyle}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>Validation Summary</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertCircle style={{ width: '20px', height: '20px', color: '#ef4444' }} />
+                      <span style={{ color: '#dc2626', fontWeight: '500' }}>{validationResult.errors.length} Errors</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                      <span className="text-yellow-600 font-medium">{validationResult.warnings.length} Warnings</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle style={{ width: '20px', height: '20px', color: '#f59e0b' }} />
+                      <span style={{ color: '#d97706', fontWeight: '500' }}>{validationResult.warnings.length} Warnings</span>
                     </div>
                   </div>
                   {validationResult.errors.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                      <h4 className="text-sm font-medium text-red-800 mb-2">Critical Errors (Must Fix)</h4>
-                      <div className="space-y-1">
+                    <div style={{
+                      backgroundColor: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      marginBottom: '12px'
+                    }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '500', color: '#991b1b', marginBottom: '8px' }}>
+                        Critical Errors (Must Fix)
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {validationResult.errors.slice(0, 3).map(error => (
-                          <div key={error.id} className="text-sm text-red-700">
+                          <div key={error.id} style={{ fontSize: '14px', color: '#b91c1c' }}>
                             • {error.entityId}: {error.message}
                           </div>
                         ))}
                         {validationResult.errors.length > 3 && (
-                          <div className="text-xs text-red-600">... and {validationResult.errors.length - 3} more errors</div>
+                          <div style={{ fontSize: '12px', color: '#dc2626' }}>
+                            ... and {validationResult.errors.length - 3} more errors
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1192,8 +1394,10 @@ export default function HomePage() {
 
               {/* Data Grids */}
               {dataSet.clients.length > 0 && (
-                <div className="bg-white rounded-lg border shadow-sm p-6">
-                  <h3 className="text-lg font-medium mb-4">Clients Data ({dataSet.clients.length} entries)</h3>
+                <div style={cardStyle}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>
+                    Clients Data ({dataSet.clients.length} entries)
+                  </h3>
                   <DataGrid
                     data={dataSet.clients}
                     type="clients"
@@ -1204,8 +1408,10 @@ export default function HomePage() {
               )}
 
               {dataSet.workers.length > 0 && (
-                <div className="bg-white rounded-lg border shadow-sm p-6">
-                  <h3 className="text-lg font-medium mb-4">Workers Data ({dataSet.workers.length} entries)</h3>
+                <div style={cardStyle}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>
+                    Workers Data ({dataSet.workers.length} entries)
+                  </h3>
                   <DataGrid
                     data={dataSet.workers}
                     type="workers"
@@ -1216,8 +1422,10 @@ export default function HomePage() {
               )}
 
               {dataSet.tasks.length > 0 && (
-                <div className="bg-white rounded-lg border shadow-sm p-6">
-                  <h3 className="text-lg font-medium mb-4">Tasks Data ({dataSet.tasks.length} entries)</h3>
+                <div style={cardStyle}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>
+                    Tasks Data ({dataSet.tasks.length} entries)
+                  </h3>
                   <DataGrid
                     data={dataSet.tasks}
                     type="tasks"
@@ -1228,25 +1436,21 @@ export default function HomePage() {
               )}
 
               {/* Navigation */}
-              <div className="flex justify-between">
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <button 
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  style={buttonStyle('outline')}
                   onClick={() => setCurrentStep('upload')}
                 >
                   Back to Upload
                 </button>
                 <button 
-                  className={`px-6 py-3 rounded-lg transition-colors ${
-                    validationResult.errors.length > 0 
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
+                  style={buttonStyle('primary', validationResult.errors.length > 0)}
                   onClick={() => setCurrentStep('rules')}
                   disabled={validationResult.errors.length > 0}
                 >
                   Continue to Rules
                   {validationResult.errors.length > 0 && (
-                    <span className="ml-2 text-xs">(Fix errors first)</span>
+                    <span style={{ marginLeft: '8px', fontSize: '12px' }}>(Fix errors first)</span>
                   )}
                 </button>
               </div>
@@ -1255,17 +1459,17 @@ export default function HomePage() {
 
           {/* Enhanced Rules Section */}
           {currentStep === 'rules' && (
-            <div className="space-y-6">
+            <div style={gridStyle}>
               {/* Priority Weights Section */}
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Sliders className="w-5 h-5" />
-                  <h3 className="text-lg font-medium">Prioritization & Weights</h3>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <Sliders style={{ width: '20px', height: '20px' }} />
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', margin: 0 }}>Prioritization & Weights</h3>
                 </div>
-                <p className="text-gray-600 mb-6">Configure how different factors influence task allocation</p>
-                <div className="space-y-4">
+                <p style={{ color: '#6b7280', marginBottom: '24px' }}>Configure how different factors influence task allocation</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
                       Client Priority Weight: {priorityWeights.clientPriority}%
                     </label>
                     <input
@@ -1277,11 +1481,18 @@ export default function HomePage() {
                         ...prev, 
                         clientPriority: parseInt(e.target.value)
                       }))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        width: '100%',
+                        height: '8px',
+                        backgroundColor: '#e5e7eb',
+                        borderRadius: '8px',
+                        appearance: 'none',
+                        cursor: 'pointer'
+                      }}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
                       Worker Load Balance: {priorityWeights.workerLoad}%
                     </label>
                     <input
@@ -1293,11 +1504,18 @@ export default function HomePage() {
                         ...prev, 
                         workerLoad: parseInt(e.target.value)
                       }))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        width: '100%',
+                        height: '8px',
+                        backgroundColor: '#e5e7eb',
+                        borderRadius: '8px',
+                        appearance: 'none',
+                        cursor: 'pointer'
+                      }}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
                       Skill Matching: {priorityWeights.skillMatch}%
                     </label>
                     <input
@@ -1309,27 +1527,42 @@ export default function HomePage() {
                         ...prev, 
                         skillMatch: parseInt(e.target.value)
                       }))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        width: '100%',
+                        height: '8px',
+                        backgroundColor: '#e5e7eb',
+                        borderRadius: '8px',
+                        appearance: 'none',
+                        cursor: 'pointer'
+                      }}
                     />
                   </div>
                 </div>
               </div>
 
               {/* Natural Language Rule Creation */}
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Brain className="w-5 h-5" />
-                  <h3 className="text-lg font-medium">AI-Powered Rule Creation</h3>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <Brain style={{ width: '20px', height: '20px' }} />
+                  <h3 style={{ fontSize: '18px', fontWeight: '500', margin: 0 }}>AI-Powered Rule Creation</h3>
                 </div>
-                <p className="text-gray-600 mb-4">Describe rules in plain English and let AI convert them</p>
-                <div className="space-y-4">
+                <p style={{ color: '#6b7280', marginBottom: '16px' }}>Describe rules in plain English and let AI convert them</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
                       Describe a rule in plain English:
                     </label>
                     <textarea 
                       placeholder="Example: 'Marketing tasks should never run in phase 1' or 'Senior developers can take maximum 2 tasks per phase'"
-                      className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        resize: 'none',
+                        minHeight: '72px',
+                        fontSize: '14px'
+                      }}
                       rows={3}
                       value={naturalLanguageRule}
                       onChange={(e) => setNaturalLanguageRule(e.target.value)}
@@ -1337,20 +1570,26 @@ export default function HomePage() {
                     <button 
                       onClick={handleCreateRule}
                       disabled={isProcessingRule || !naturalLanguageRule.trim()}
-                      className={`mt-2 flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                        isProcessingRule || !naturalLanguageRule.trim()
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                      style={{
+                        ...buttonStyle('primary', isProcessingRule || !naturalLanguageRule.trim()),
+                        marginTop: '8px'
+                      }}
                     >
                       {isProcessingRule ? (
                         <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <div style={{
+                            width: '16px',
+                            height: '16px',
+                            border: '2px solid white',
+                            borderTop: '2px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }}></div>
                           <span>Converting...</span>
                         </>
                       ) : (
                         <>
-                          <Wand2 className="w-4 h-4" />
+                          <Wand2 style={{ width: '16px', height: '16px' }} />
                           <span>Convert to Rule</span>
                         </>
                       )}
@@ -1360,43 +1599,61 @@ export default function HomePage() {
               </div>
 
               {/* AI Recommendations */}
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <Lightbulb className="w-5 h-5" />
-                    <h3 className="text-lg font-medium">AI Rule Recommendations</h3>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Lightbulb style={{ width: '20px', height: '20px' }} />
+                    <h3 style={{ fontSize: '18px', fontWeight: '500', margin: 0 }}>AI Rule Recommendations</h3>
                   </div>
                   <button 
                     onClick={handleGenerateRecommendations}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    style={buttonStyle('outline')}
                   >
                     Generate Recommendations
                   </button>
                 </div>
                 {recommendedRules.length > 0 ? (
-                  <div className="space-y-3">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {recommendedRules.map(rule => (
-                      <div key={rule.id} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-blue-900">{rule.description}</h4>
-                            <p className="text-sm text-blue-700 mt-1">
+                      <div key={rule.id} style={{
+                        padding: '12px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1 }}>
+                            <h4 style={{ fontWeight: '500', color: '#1e3a8a', margin: '0 0 4px 0' }}>{rule.description}</h4>
+                            <p style={{ fontSize: '14px', color: '#1e40af', margin: '0 0 8px 0' }}>
                               {rule.condition} → {rule.action}
                             </p>
-                            <div className="flex items-center space-x-2 mt-2">
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                rule.type === 'constraint' ? 'bg-red-100 text-red-700' :
-                                rule.type === 'requirement' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{
+                                padding: '2px 8px',
+                                fontSize: '12px',
+                                borderRadius: '999px',
+                                backgroundColor: rule.type === 'constraint' ? '#fee2e2' : 
+                                                rule.type === 'requirement' ? '#fef3c7' : '#dcfce7',
+                                color: rule.type === 'constraint' ? '#991b1b' :
+                                       rule.type === 'requirement' ? '#92400e' : '#166534'
+                              }}>
                                 {rule.type}
                               </span>
-                              <span className="text-xs text-blue-600">Priority: {rule.priority}</span>
+                              <span style={{ fontSize: '12px', color: '#2563eb' }}>Priority: {rule.priority}</span>
                             </div>
                           </div>
                           <button 
                             onClick={() => addRecommendedRule(rule)}
-                            className="ml-3 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                            style={{
+                              marginLeft: '12px',
+                              padding: '6px 12px',
+                              backgroundColor: '#2563eb',
+                              color: 'white',
+                              fontSize: '14px',
+                              borderRadius: '4px',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
                           >
                             Add Rule
                           </button>
@@ -1405,51 +1662,75 @@ export default function HomePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center text-gray-500 py-4">
+                  <div style={{ textAlign: 'center', color: '#6b7280', padding: '16px' }}>
                     Click "Generate Recommendations" to get AI-suggested rules based on your data
                   </div>
                 )}
               </div>
 
               {/* Active Rules */}
-              <div className="bg-white rounded-lg border shadow-sm p-6">
-                <h3 className="text-lg font-medium mb-4">Active Business Rules ({businessRules.length})</h3>
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>
+                  Active Business Rules ({businessRules.length})
+                </h3>
                 {businessRules.length > 0 ? (
-                  <div className="space-y-3">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {businessRules.map(rule => (
-                      <div key={rule.id} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <h4 className="font-medium text-gray-900">{rule.description}</h4>
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                rule.type === 'constraint' ? 'bg-red-100 text-red-700' :
-                                rule.type === 'requirement' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
+                      <div key={rule.id} style={{
+                        padding: '16px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                              <h4 style={{ fontWeight: '500', color: '#111827', margin: 0 }}>{rule.description}</h4>
+                              <span style={{
+                                padding: '2px 8px',
+                                fontSize: '12px',
+                                borderRadius: '999px',
+                                backgroundColor: rule.type === 'constraint' ? '#fee2e2' : 
+                                                rule.type === 'requirement' ? '#fef3c7' : '#dcfce7',
+                                color: rule.type === 'constraint' ? '#991b1b' :
+                                       rule.type === 'requirement' ? '#92400e' : '#166534'
+                              }}>
                                 {rule.type}
                               </span>
-                              <span className="text-xs text-gray-500">Priority: {rule.priority}</span>
+                              <span style={{ fontSize: '12px', color: '#6b7280' }}>Priority: {rule.priority}</span>
                             </div>
-                            <p className="text-sm text-gray-600 mb-2">
+                            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 4px 0' }}>
                               <strong>When:</strong> {rule.condition}
                             </p>
-                            <p className="text-sm text-gray-600">
+                            <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
                               <strong>Then:</strong> {rule.action}
                             </p>
                           </div>
-                          <div className="flex items-center space-x-2 ml-3">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
                             <button
                               onClick={() => toggleRule(rule.id)}
-                              className={`p-2 rounded-lg ${rule.active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}
+                              style={{
+                                padding: '8px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                backgroundColor: rule.active ? '#dcfce7' : '#f3f4f6',
+                                color: rule.active ? '#166534' : '#9ca3af'
+                              }}
                             >
-                              <Power className="w-4 h-4" />
+                              <Power style={{ width: '16px', height: '16px' }} />
                             </button>
                             <button
                               onClick={() => deleteRule(rule.id)}
-                              className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200"
+                              style={{
+                                padding: '8px',
+                                borderRadius: '8px',
+                                backgroundColor: '#fee2e2',
+                                color: '#dc2626',
+                                border: 'none',
+                                cursor: 'pointer'
+                              }}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 style={{ width: '16px', height: '16px' }} />
                             </button>
                           </div>
                         </div>
@@ -1457,24 +1738,24 @@ export default function HomePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center text-gray-500 py-8">
-                    <Settings className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                    <p>No rules created yet</p>
-                    <p className="text-sm">Use the AI tools above to create your first rule</p>
+                  <div style={{ textAlign: 'center', color: '#6b7280', padding: '32px' }}>
+                    <Settings style={{ width: '48px', height: '48px', margin: '0 auto 12px auto', color: '#d1d5db' }} />
+                    <p style={{ margin: '0 0 4px 0' }}>No rules created yet</p>
+                    <p style={{ fontSize: '14px', margin: 0 }}>Use the AI tools above to create your first rule</p>
                   </div>
                 )}
               </div>
 
               {/* Navigation */}
-              <div className="flex justify-between pt-4">
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '16px' }}>
                 <button 
-                  className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  style={buttonStyle('outline')}
                   onClick={() => setCurrentStep('validate')}
                 >
                   Back to Validation
                 </button>
                 <button 
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  style={buttonStyle('primary')}
                   onClick={() => setCurrentStep('export')}
                 >
                   Continue to Export
@@ -1485,32 +1766,44 @@ export default function HomePage() {
 
           {/* Export Section */}
           {currentStep === 'export' && (
-            <div className="bg-white rounded-lg border shadow-sm p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Export Configuration</h2>
-              <p className="text-gray-600 mb-6">
+            <div style={cardStyle}>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: '0 0 8px 0' }}>
+                Export Configuration
+              </h2>
+              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
                 Download your cleaned data and configuration files for downstream processing.
               </p>
-              <div className="space-y-6">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {/* Export Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-                      <span className="font-medium text-blue-900">Data Files</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div style={{
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '8px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileSpreadsheet style={{ width: '20px', height: '20px', color: '#2563eb' }} />
+                      <span style={{ fontWeight: '500', color: '#1e3a8a' }}>Data Files</span>
                     </div>
-                    <div className="mt-2 text-sm text-blue-700">
+                    <div style={{ marginTop: '8px', fontSize: '14px', color: '#1e40af' }}>
                       <div>• {dataSet.clients.length} clients</div>
                       <div>• {dataSet.workers.length} workers</div>
                       <div>• {dataSet.tasks.length} tasks</div>
                     </div>
                   </div>
                   
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="font-medium text-green-900">Validation</span>
+                  <div style={{
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '8px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle style={{ width: '20px', height: '20px', color: '#16a34a' }} />
+                      <span style={{ fontWeight: '500', color: '#15803d' }}>Validation</span>
                     </div>
-                    <div className="mt-2 text-sm text-green-700">
+                    <div style={{ marginTop: '8px', fontSize: '14px', color: '#166534' }}>
                       {validationResult.isValid ? (
                         <div>✓ All validations passed</div>
                       ) : (
@@ -1522,12 +1815,17 @@ export default function HomePage() {
                     </div>
                   </div>
                   
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <Settings className="w-5 h-5 text-purple-600" />
-                      <span className="font-medium text-purple-900">Rules</span>
+                  <div style={{
+                    backgroundColor: '#faf5ff',
+                    border: '1px solid #d8b4fe',
+                    borderRadius: '8px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Settings style={{ width: '20px', height: '20px', color: '#9333ea' }} />
+                      <span style={{ fontWeight: '500', color: '#7c3aed' }}>Rules</span>
                     </div>
-                    <div className="mt-2 text-sm text-purple-700">
+                    <div style={{ marginTop: '8px', fontSize: '14px', color: '#6b21a8' }}>
                       <div>{businessRules.filter(r => r.active).length} active rules</div>
                       <div>Ready for export</div>
                     </div>
@@ -1536,55 +1834,93 @@ export default function HomePage() {
 
                 {/* File Preview */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Files to be exported:</h4>
-                  <div className="space-y-2">
+                  <h4 style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '12px' }}>
+                    Files to be exported:
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {dataSet.clients.length > 0 && (
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm">clients_cleaned.csv</span>
-                        <span className="text-xs text-gray-500">{dataSet.clients.length} entries</span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '14px' }}>clients_cleaned.csv</span>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{dataSet.clients.length} entries</span>
                       </div>
                     )}
                     {dataSet.workers.length > 0 && (
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm">workers_cleaned.csv</span>
-                        <span className="text-xs text-gray-500">{dataSet.workers.length} entries</span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '14px' }}>workers_cleaned.csv</span>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{dataSet.workers.length} entries</span>
                       </div>
                     )}
                     {dataSet.tasks.length > 0 && (
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm">tasks_cleaned.csv</span>
-                        <span className="text-xs text-gray-500">{dataSet.tasks.length} entries</span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '14px' }}>tasks_cleaned.csv</span>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{dataSet.tasks.length} entries</span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-sm">validation_report.json</span>
-                      <span className="text-xs text-gray-500">Validation summary</span>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px',
+                      backgroundColor: '#f9fafb',
+                      borderRadius: '4px'
+                    }}>
+                      <span style={{ fontSize: '14px' }}>validation_report.json</span>
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>Validation summary</span>
                     </div>
                     {businessRules.length > 0 && (
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm">business_rules.json</span>
-                        <span className="text-xs text-gray-500">{businessRules.length} rules</span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '4px'
+                      }}>
+                        <span style={{ fontSize: '14px' }}>business_rules.json</span>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{businessRules.length} rules</span>
                       </div>
                     )}
                   </div>
                 </div>
                 
                 {/* Export Actions */}
-                <div className="flex space-x-3">
+                <div style={{ display: 'flex', gap: '12px' }}>
                   <button 
-                    className={`flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg text-lg font-medium transition-colors ${
-                      dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                    style={{
+                      ...buttonStyle('primary', dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0),
+                      flex: 1,
+                      fontSize: '18px',
+                      padding: '12px 24px'
+                    }}
                     onClick={exportData}
                     disabled={dataSet.clients.length + dataSet.workers.length + dataSet.tasks.length === 0}
                   >
-                    <Download className="w-4 h-4" />
+                    <Download style={{ width: '16px', height: '16px' }} />
                     <span>Download All Files</span>
                   </button>
                   <button 
-                    className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    style={buttonStyle('outline')}
                     onClick={() => setCurrentStep('rules')}
                   >
                     Back to Rules
@@ -1596,72 +1932,80 @@ export default function HomePage() {
         </div>
 
         {/* Right Column - Status & Info */}
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* System Status */}
-          <div className="bg-white rounded-lg border shadow-sm p-6">
-            <h3 className="text-lg font-medium mb-4">System Status</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Parser Engine</span>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Ready</span>
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>System Status</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Parser Engine</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }}></div>
+                  <span style={{ fontSize: '14px', color: '#059669' }}>Ready</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Validation Engine</span>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Active</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Validation Engine</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }}></div>
+                  <span style={{ fontSize: '14px', color: '#059669' }}>Active</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">AI Rules Engine</span>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Ready</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>AI Rules Engine</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }}></div>
+                  <span style={{ fontSize: '14px', color: '#059669' }}>Ready</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Export System</span>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-green-600">Ready</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Export System</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }}></div>
+                  <span style={{ fontSize: '14px', color: '#059669' }}>Ready</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Quick Stats */}
-          <div className="bg-white rounded-lg border shadow-sm p-6">
-            <h3 className="text-lg font-medium mb-4">Data Summary</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Total Clients</span>
-                <span className="text-sm font-medium">{dataSet.clients.length}</span>
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>Data Summary</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Total Clients</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{dataSet.clients.length}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Total Workers</span>
-                <span className="text-sm font-medium">{dataSet.workers.length}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Total Workers</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{dataSet.workers.length}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Total Tasks</span>
-                <span className="text-sm font-medium">{dataSet.tasks.length}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Total Tasks</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{dataSet.tasks.length}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Active Rules</span>
-                <span className="text-sm font-medium">{businessRules.filter(r => r.active).length}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Active Rules</span>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>{businessRules.filter(r => r.active).length}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Validation Errors</span>
-                <span className={`text-sm font-medium ${validationResult.errors.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Validation Errors</span>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '500',
+                  color: validationResult.errors.length > 0 ? '#dc2626' : '#059669'
+                }}>
                   {validationResult.errors.length}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Validation Warnings</span>
-                <span className={`text-sm font-medium ${validationResult.warnings.length > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Validation Warnings</span>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '500',
+                  color: validationResult.warnings.length > 0 ? '#d97706' : '#059669'
+                }}>
                   {validationResult.warnings.length}
                 </span>
               </div>
@@ -1669,28 +2013,28 @@ export default function HomePage() {
           </div>
 
           {/* Help Panel */}
-          <div className="bg-white rounded-lg border shadow-sm p-6">
-            <h3 className="text-lg font-medium mb-4">Quick Tips</h3>
-            <div className="space-y-3">
-              <div className="text-sm text-gray-600">
-                <h4 className="font-medium text-gray-900 mb-1">File Naming:</h4>
-                <ul className="text-xs space-y-1">
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px' }}>Quick Tips</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                <h4 style={{ fontWeight: '500', color: '#111827', marginBottom: '4px' }}>File Naming:</h4>
+                <ul style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '16px' }}>
                   <li>• Use "clients" in filename for client data</li>
                   <li>• Use "workers" in filename for worker data</li>
                   <li>• Use "tasks" in filename for task data</li>
                 </ul>
               </div>
-              <div className="text-sm text-gray-600">
-                <h4 className="font-medium text-gray-900 mb-1">Data Format:</h4>
-                <ul className="text-xs space-y-1">
+              <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                <h4 style={{ fontWeight: '500', color: '#111827', marginBottom: '4px' }}>Data Format:</h4>
+                <ul style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '16px' }}>
                   <li>• Arrays: "skill1,skill2,skill3"</li>
                   <li>• Numbers: "1,2,3" or "[1,2,3]"</li>
                   <li>• Priority: 1-5 (higher = more important)</li>
                 </ul>
               </div>
-              <div className="text-sm text-gray-600">
-                <h4 className="font-medium text-gray-900 mb-1">AI Features:</h4>
-                <ul className="text-xs space-y-1">
+              <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                <h4 style={{ fontWeight: '500', color: '#111827', marginBottom: '4px' }}>AI Features:</h4>
+                <ul style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '16px' }}>
                   <li>• Natural language rule creation</li>
                   <li>• Smart data querying</li>
                   <li>• Error correction suggestions</li>
@@ -1701,6 +2045,31 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #3b82f6;
+          cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #3b82f6;
+          cursor: pointer;
+          border: none;
+        }
+      `}</style>
     </div>
   );
 }
